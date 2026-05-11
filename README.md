@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/icon-512.png" alt="Screenshot Ultra app icon — a six-bladed camera aperture iris in shutter red on a macOS squircle background" width="180" height="180"/>
+</p>
+
 # Screenshot Ultra
 
 A snappy, hotkey-first macOS screenshot and screen recorder. Press a key, capture anything on screen — region, window, fullscreen, or clipboard image — annotate it inline with eleven tools, and it's on your clipboard before the shutter sound finishes. Built in Rust + native AppKit, runs entirely on your machine, no telemetry, no cloud account, no auto-upload.
