@@ -10,9 +10,31 @@ pub struct Settings {
     #[serde(default)]
     pub general: General,
     #[serde(default)]
+    pub capture: CaptureOptions,
+    #[serde(default)]
     pub hotkeys: Hotkeys,
     #[serde(default)]
     pub sinks: Sinks,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CaptureOptions {
+    /// Include the mouse cursor in the capture (passes `-C` to screencapture).
+    #[serde(default)]
+    pub include_cursor: bool,
+    /// Fullscreen scope:
+    ///   "main"    — main display only (single file). Default.
+    ///   "all"     — every connected display, one file per display.
+    pub fullscreen_scope: String,
+}
+
+impl Default for CaptureOptions {
+    fn default() -> Self {
+        Self {
+            include_cursor: false,
+            fullscreen_scope: "main".into(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -27,6 +27,7 @@ mod mac {
     #[derive(Debug, Clone, Copy)]
     enum Action {
         Copy,
+        Edit,
         OpenFolder,
         RevealInFinder,
         Pin,
@@ -71,10 +72,11 @@ mod mac {
                 let tag: isize = unsafe { msg_send![sender, tag] };
                 let action = match tag {
                     1 => Action::Copy,
-                    2 => Action::OpenFolder,
-                    3 => Action::RevealInFinder,
-                    4 => Action::Pin,
-                    5 => Action::Discard,
+                    2 => Action::Edit,
+                    3 => Action::OpenFolder,
+                    4 => Action::RevealInFinder,
+                    5 => Action::Pin,
+                    6 => Action::Discard,
                     _ => return,
                 };
                 perform_action(action);
@@ -115,6 +117,18 @@ mod mac {
                     "path": path.display().to_string(),
                 }));
             }
+            Action::Edit => {
+                // Until our native editor lands (later in M2), bounce
+                // through Apple Preview which has built-in markup tools.
+                let _ = std::process::Command::new("open")
+                    .arg("-a")
+                    .arg("Preview")
+                    .arg(&path)
+                    .status();
+                crate::logging::event(serde_json::json!({
+                    "evt": "tray_action", "action": "edit_in_preview",
+                }));
+            }
             Action::OpenFolder => {
                 if let Some(parent) = path.parent() {
                     let _ = std::process::Command::new("open").arg(parent).status();
@@ -148,7 +162,7 @@ mod mac {
         }
     }
 
-    const PANEL_W: f64 = 430.0;
+    const PANEL_W: f64 = 480.0;
     const PANEL_H: f64 = 110.0;
     const MARGIN: f64 = 24.0;
     const THUMB: f64 = 80.0;
@@ -260,9 +274,9 @@ mod mac {
         let handler: Retained<Handler> = unsafe { msg_send![Handler::alloc(), init] };
 
         // Button row.
-        let labels = ["Copy", "Folder", "Reveal", "Pin", "Discard"];
-        let tags: [isize; 5] = [1, 2, 3, 4, 5];
-        let btn_w = 60.0;
+        let labels = ["Copy", "Edit", "Folder", "Reveal", "Pin", "Discard"];
+        let tags: [isize; 6] = [1, 2, 3, 4, 5, 6];
+        let btn_w = 56.0;
         let btn_h = 28.0;
         let gap = 4.0;
         let total = (btn_w * labels.len() as f64) + (gap * (labels.len() as f64 - 1.0));

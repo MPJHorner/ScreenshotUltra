@@ -115,14 +115,21 @@ pub fn run(mode: CaptureMode, show_tray: bool, settings: &Settings) -> Result<()
     cmd.arg("-x")
         .arg("-t")
         .arg(&settings.general.default_image_format);
+
+    if settings.capture.include_cursor {
+        cmd.arg("-C");
+    }
+
     match mode {
         CaptureMode::Region => {
             cmd.arg("-i"); // interactive region (esc cancels → no file written)
         }
         CaptureMode::Fullscreen => {
-            // default = all displays, one file per display. -m would limit to main display.
-            // For M1 we capture main display only for a single-file result.
-            cmd.arg("-m");
+            // "main" = main display only; anything else = all displays
+            // (the default behavior when -m is omitted).
+            if settings.capture.fullscreen_scope.as_str() == "main" {
+                cmd.arg("-m");
+            }
         }
         CaptureMode::Window => {
             // Interactive window selection. -o disables the window shadow so

@@ -22,11 +22,14 @@ capture mode.
       bar, sized to the capture aspect ratio. Hotkey `⌃⌥⌘.` and Quick Tray
       "Pin" button. Multiple pins cascade. *(Frameless mode, opacity
       scroll, and `⌘+/⌘-` zoom land in a follow-up.)*
-- [x] Quick Tray (post-capture floating thumbnail, bottom-right):
-      Copy / Folder / Reveal / Discard buttons, auto-dismiss after
-      `quick_tray_timeout_ms`. ✅ shipped — native `NSPanel` via `objc2`.
-- [x] Separate "silent" capture flow (`silent_region`, `silent_fullscreen`
-      hotkey slots) so users can choose tray-or-no-tray per hotkey.
+- [x] Quick Tray (post-capture floating panel, bottom-right): Copy / Edit /
+      Folder / Reveal / Pin / Discard buttons, auto-dismiss after
+      `quick_tray_timeout_ms`. Native `NSWindow` via `objc2`.
+- [x] "Edit in Preview" tray button — opens the capture in macOS Preview
+      for annotation. *(A native editor lands later in M2.)*
+- [x] Separate "silent" capture flow (`silent_region` / `silent_fullscreen` /
+      `silent_window` hotkey slots) so users can choose tray-or-no-tray per
+      hotkey.
 - [ ] Basic Preferences window (general + hotkeys tabs) — at this point we
       have enough surface area to justify a GUI for the bits in settings.toml.
 

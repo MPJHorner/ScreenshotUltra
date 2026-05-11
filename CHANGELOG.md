@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added — M2 (in progress)
+- **Edit button** on the Quick Tray — opens the capture in Apple
+  Preview for annotation (markup tools, signatures, redaction). A
+  placeholder for the native editor planned later in M2.
+- **`[capture]` settings**:
+  - `include_cursor` — pass `-C` to `screencapture` so the mouse
+    cursor is baked into the image.
+  - `fullscreen_scope = "main"` (default) or `"all"` — main display
+    only vs. every connected display.
+- **Documentation site** under `site/` (mkdocs-material) — Install,
+  Quick start, Hotkeys, Capture modes, Sinks, Configuration, Logging,
+  Changelog. Deployed via `.github/workflows/pages.yml`.
 - **Settings hot-reload** — `settings.toml` is watched in a background thread
   and changes are applied within ~1 s. Invalid hotkeys keep the previous
   binding (with a log message) instead of crashing.
