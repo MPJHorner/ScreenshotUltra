@@ -1,0 +1,36 @@
+[package]
+name = "screenshot-ultra"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "A snappy, hotkey-first macOS screenshot and screen recorder. Local-first. No cloud."
+authors = ["MPJHorner <matt@heyjodie.com>"]
+license = "MIT"
+repository = "https://github.com/MPJHorner/ScreenshotUltra"
+readme = "README.md"
+keywords = ["screenshot", "macos", "capture", "hotkey", "screen-recording"]
+categories = ["multimedia::images", "command-line-utilities"]
+
+[[bin]]
+name = "screenshot-ultra"
+path = "src/main.rs"
+
+[dependencies]
+tao = "0.30"
+tray-icon = "0.19"
+global-hotkey = "0.6"
+arboard = { version = "3", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+dirs = "5"
+anyhow = "1"
+thiserror = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

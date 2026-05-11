@@ -1,0 +1,20 @@
+/target
+**/*.rs.bk
+Cargo.lock.bak
+.DS_Store
+*.swp
+*.swo
+
+# build outputs
+/dist
+*.dmg
+*.app
+
+# editor
+.idea/
+.vscode/
+*.iml
+
+# OS / runtime
+.env
+.env.local
