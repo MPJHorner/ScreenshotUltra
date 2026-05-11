@@ -12,6 +12,8 @@ use crate::settings::Hotkeys;
 pub enum Action {
     Region,
     Fullscreen,
+    SilentRegion,
+    SilentFullscreen,
 }
 
 impl Action {
@@ -19,13 +21,20 @@ impl Action {
         match self {
             Action::Region => "region",
             Action::Fullscreen => "fullscreen",
+            Action::SilentRegion => "silent_region",
+            Action::SilentFullscreen => "silent_fullscreen",
         }
     }
     pub fn label(self) -> &'static str {
         match self {
-            Action::Region => "Region",
-            Action::Fullscreen => "Fullscreen",
+            Action::Region => "Region (tray)",
+            Action::Fullscreen => "Fullscreen (tray)",
+            Action::SilentRegion => "Region (silent)",
+            Action::SilentFullscreen => "Fullscreen (silent)",
         }
+    }
+    pub fn show_tray(self) -> bool {
+        matches!(self, Action::Region | Action::Fullscreen)
     }
 }
 
@@ -49,7 +58,13 @@ pub fn register_all(cfg: &Hotkeys) -> Result<Registered> {
     for (action, accel) in [
         (Action::Region, cfg.region.clone()),
         (Action::Fullscreen, cfg.fullscreen.clone()),
+        (Action::SilentRegion, cfg.silent_region.clone()),
+        (Action::SilentFullscreen, cfg.silent_fullscreen.clone()),
     ] {
+        // Empty string = intentionally unbound. Skip silently.
+        if accel.trim().is_empty() {
+            continue;
+        }
         let hk = parse(&accel)
             .with_context(|| format!("parsing hotkey for {}: {accel}", action.id()))?;
         manager

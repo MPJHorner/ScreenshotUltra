@@ -10,6 +10,8 @@ use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 pub enum MenuAction {
     Region,
     Fullscreen,
+    SilentRegion,
+    SilentFullscreen,
     OpenFolder,
     Quit,
 }
@@ -17,6 +19,8 @@ pub enum MenuAction {
 struct Ids {
     region: MenuId,
     fullscreen: MenuId,
+    silent_region: MenuId,
+    silent_fullscreen: MenuId,
     open_folder: MenuId,
     quit: MenuId,
 }
@@ -25,14 +29,18 @@ static IDS: OnceLock<Ids> = OnceLock::new();
 
 pub fn build() -> Result<TrayIcon> {
     let menu = Menu::new();
-    let region = MenuItem::new("Capture Region\t⌃⌥⌘1", true, None);
+    let region = MenuItem::new("Capture Region…\t⌃⌥⌘1", true, None);
     let fullscreen = MenuItem::new("Capture Fullscreen\t⌃⌥⌘3", true, None);
+    let silent_region = MenuItem::new("Capture Region (silent)", true, None);
+    let silent_fullscreen = MenuItem::new("Capture Fullscreen (silent)", true, None);
     let open_folder = MenuItem::new("Open Save Folder", true, None);
     let quit = MenuItem::new("Quit Screenshot Ultra", true, None);
 
     let ids = Ids {
         region: region.id().clone(),
         fullscreen: fullscreen.id().clone(),
+        silent_region: silent_region.id().clone(),
+        silent_fullscreen: silent_fullscreen.id().clone(),
         open_folder: open_folder.id().clone(),
         quit: quit.id().clone(),
     };
@@ -40,6 +48,9 @@ pub fn build() -> Result<TrayIcon> {
 
     menu.append(&region).ok();
     menu.append(&fullscreen).ok();
+    menu.append(&PredefinedMenuItem::separator()).ok();
+    menu.append(&silent_region).ok();
+    menu.append(&silent_fullscreen).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
     menu.append(&open_folder).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
@@ -64,6 +75,10 @@ pub fn menu_action(id: &MenuId) -> Option<MenuAction> {
         Some(MenuAction::Region)
     } else if id == &ids.fullscreen {
         Some(MenuAction::Fullscreen)
+    } else if id == &ids.silent_region {
+        Some(MenuAction::SilentRegion)
+    } else if id == &ids.silent_fullscreen {
+        Some(MenuAction::SilentFullscreen)
     } else if id == &ids.open_folder {
         Some(MenuAction::OpenFolder)
     } else if id == &ids.quit {

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — M2 (in progress)
+- Quick Tray: a floating bottom-right panel that appears after a capture with
+  Copy / Folder / Reveal / Discard buttons and auto-dismisses after
+  `quick_tray_timeout_ms` (default 6 s). Native `NSPanel` via `objc2`.
+- Silent capture variants (`silent_region`, `silent_fullscreen`) — separate
+  hotkey slots that skip the tray and just save+copy. Unbound by default;
+  set them in `settings.toml` to enable.
+- Tray menu now lists both standard and silent variants.
+
 ### Added — M1 "Press the key"
 - Menu-bar agent (`LSUIElement = true`) with a status-bar icon and basic menu.
 - Global hotkey listener with rebindable accelerators in `settings.toml`.

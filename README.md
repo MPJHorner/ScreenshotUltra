@@ -18,6 +18,10 @@ This repository is under active development. The current shipped milestone is
 - Clipboard sink (image lands on your clipboard on every capture).
 - NDJSON event log at `~/Library/Logs/ScreenshotUltra/log.ndjson`.
 
+**M2 progress:** the Quick Tray (post-capture floating toolbar) and the
+silent-vs-standard capture split have landed; the annotation editor, window
+capture, Pin-to-screen, and Preferences UI are still ahead.
+
 Future milestones (M2–M6) are tracked in [`docs/milestones/`](docs/milestones/)
 and the full design lives in [`plan.md`](plan.md).
 
@@ -44,10 +48,18 @@ Recording, then launch the app again.
 
 ## Default hotkeys
 
-| Action               | Default       |
-|----------------------|---------------|
-| Region capture       | `⌃⌥⌘1`        |
-| Fullscreen capture   | `⌃⌥⌘3`        |
+| Action                       | Default | Notes                                |
+|------------------------------|---------|--------------------------------------|
+| Region capture (Quick Tray)  | `⌃⌥⌘1`  | Standard flow: shows the floating tray |
+| Fullscreen capture (Quick Tray)| `⌃⌥⌘3`| Standard flow: shows the floating tray |
+| Region capture (silent)      | _unset_ | Bind `silent_region` in settings to enable |
+| Fullscreen capture (silent)  | _unset_ | Bind `silent_fullscreen` in settings to enable |
+
+After every "standard" capture, the **Quick Tray** appears bottom-right with
+Copy / Folder / Reveal / Discard buttons. It auto-dismisses after 6 s
+(`quick_tray_timeout_ms`). The silent variants skip the tray and just save +
+copy to clipboard — useful when you want zero-latency capture for piping
+into other tools.
 
 All hotkeys are rebindable in
 `~/Library/Application Support/ScreenshotUltra/settings.toml`.
@@ -68,8 +80,10 @@ default_image_format   = "png"
 copy_on_capture        = true
 
 [hotkeys]
-region                 = "ctrl+alt+cmd+1"
-fullscreen             = "ctrl+alt+cmd+3"
+region                 = "ctrl+alt+cmd+1"   # standard flow (Quick Tray)
+fullscreen             = "ctrl+alt+cmd+3"   # standard flow (Quick Tray)
+silent_region          = ""                 # set e.g. "ctrl+alt+cmd+2" to enable
+silent_fullscreen      = ""                 # set e.g. "ctrl+alt+cmd+4" to enable
 
 [sinks]
 clipboard              = true

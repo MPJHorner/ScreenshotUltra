@@ -23,12 +23,26 @@ pub struct General {
     pub copy_on_capture: bool,
     pub play_shutter_sound: bool,
     pub show_in_dock: bool,
+    #[serde(default = "default_tray_timeout_ms")]
+    pub quick_tray_timeout_ms: u64,
+}
+
+fn default_tray_timeout_ms() -> u64 {
+    6000
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Hotkeys {
+    /// Region capture with Quick Tray (the standard flow). Empty = unbound.
     pub region: String,
+    /// Fullscreen capture with Quick Tray (the standard flow). Empty = unbound.
     pub fullscreen: String,
+    /// Region capture, silent: save to disk + clipboard, no UI. Empty = unbound.
+    #[serde(default)]
+    pub silent_region: String,
+    /// Fullscreen capture, silent. Empty = unbound.
+    #[serde(default)]
+    pub silent_fullscreen: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -46,6 +60,7 @@ impl Default for General {
             copy_on_capture: true,
             play_shutter_sound: true,
             show_in_dock: false,
+            quick_tray_timeout_ms: 6000,
         }
     }
 }
@@ -55,6 +70,8 @@ impl Default for Hotkeys {
         Self {
             region: "ctrl+alt+cmd+1".into(),
             fullscreen: "ctrl+alt+cmd+3".into(),
+            silent_region: String::new(),
+            silent_fullscreen: String::new(),
         }
     }
 }

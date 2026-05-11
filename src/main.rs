@@ -6,6 +6,7 @@
 mod capture;
 mod hotkeys;
 mod logging;
+mod quick_tray;
 mod settings;
 mod sinks;
 mod tray;
@@ -85,6 +86,12 @@ fn main() -> Result<()> {
                     Some(tray::MenuAction::Fullscreen) => {
                         handle_action(hotkeys::Action::Fullscreen, &settings)
                     }
+                    Some(tray::MenuAction::SilentRegion) => {
+                        handle_action(hotkeys::Action::SilentRegion, &settings)
+                    }
+                    Some(tray::MenuAction::SilentFullscreen) => {
+                        handle_action(hotkeys::Action::SilentFullscreen, &settings)
+                    }
                     Some(tray::MenuAction::OpenFolder) => {
                         let _ = std::process::Command::new("open")
                             .arg(settings.general.save_folder_expanded())
@@ -100,10 +107,11 @@ fn main() -> Result<()> {
 
 fn handle_action(action: hotkeys::Action, settings: &Settings) {
     let mode = match action {
-        hotkeys::Action::Region => CaptureMode::Region,
-        hotkeys::Action::Fullscreen => CaptureMode::Fullscreen,
+        hotkeys::Action::Region | hotkeys::Action::SilentRegion => CaptureMode::Region,
+        hotkeys::Action::Fullscreen | hotkeys::Action::SilentFullscreen => CaptureMode::Fullscreen,
     };
-    if let Err(err) = capture::run(mode, settings) {
+    let show_tray = action.show_tray();
+    if let Err(err) = capture::run(mode, show_tray, settings) {
         eprintln!("capture failed: {err:#}");
         logging::event(serde_json::json!({
             "evt": "error",

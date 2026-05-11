@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Instant;
 
 use crate::logging;
+use crate::quick_tray;
 use crate::settings::Settings;
 use crate::sinks;
 
@@ -32,7 +33,7 @@ impl CaptureMode {
     }
 }
 
-pub fn run(mode: CaptureMode, settings: &Settings) -> Result<()> {
+pub fn run(mode: CaptureMode, show_tray: bool, settings: &Settings) -> Result<()> {
     let start = Instant::now();
     let folder = settings.general.save_folder_expanded();
     std::fs::create_dir_all(&folder)
@@ -109,6 +110,10 @@ pub fn run(mode: CaptureMode, settings: &Settings) -> Result<()> {
         bytes,
         duration_ms
     );
+
+    if show_tray {
+        quick_tray::show(&path, settings.general.quick_tray_timeout_ms);
+    }
 
     Ok(())
 }

@@ -1,6 +1,6 @@
 # M2 — Annotate
 
-**Status:** ⏳ planned
+**Status:** 🚧 in progress
 
 **Goal:** A native annotation editor that opens immediately after every
 capture (configurable), plus the Quick Tray, Pin-to-screen, and the Window
@@ -18,9 +18,11 @@ capture mode.
       drop shadow toggle.
 - [ ] Pin-to-screen: floating, frameless, always-on-top, opacity scroll,
       ⌘+/− zoom, ⌫ to dismiss; multiple pins supported.
-- [ ] Quick Tray (post-capture floating thumbnail, bottom-right, configurable
-      corner): ↵ open editor, ⌘C copy, ⌘S save, D drag-out, P pin,
-      ⌫ discard, auto-dismiss after `quick_tray_timeout_ms`.
+- [x] Quick Tray (post-capture floating thumbnail, bottom-right):
+      Copy / Folder / Reveal / Discard buttons, auto-dismiss after
+      `quick_tray_timeout_ms`. ✅ shipped — native `NSPanel` via `objc2`.
+- [x] Separate "silent" capture flow (`silent_region`, `silent_fullscreen`
+      hotkey slots) so users can choose tray-or-no-tray per hotkey.
 - [ ] Basic Preferences window (general + hotkeys tabs) — at this point we
       have enough surface area to justify a GUI for the bits in settings.toml.
 
@@ -29,3 +31,16 @@ capture mode.
 - Does the editor canvas need a Metal layer behind egui chrome for drag
   latency on 6K displays? Profile early (plan.md §15 risk).
 - "Magic-arrow" snap-to-UI-element heuristic — leave for M5 polish?
+
+## Notes on the Quick Tray shipped today
+
+- Buttons are `Copy` / `Folder` (open the save folder) / `Reveal`
+  (Finder reveal) / `Discard` (delete the file). The plan's `Pin` and
+  `Drag-out` actions land later in M2 once the editor and Pin-to-screen
+  exist.
+- Implementation lives in `src/quick_tray.rs`. The panel is borderless,
+  non-activating, status-window level, positioned bottom-right of the main
+  screen; corner radius via `CALayer`.
+- The "silent" hotkeys (`silent_region`, `silent_fullscreen`) are unbound
+  by default — set them in `~/Library/Application Support/ScreenshotUltra/settings.toml`
+  to enable both flows side-by-side.
