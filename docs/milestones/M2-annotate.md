@@ -10,11 +10,11 @@ capture mode.
 
 - [~] Editor window — native `NSWindow` + custom `CanvasView` via `objc2`.
       **Tools shipped: Pen / Line / Arrow / Rect / Ellipse / Highlighter /
-      Redact** (P / L / A / R / E / H / X shortcuts). Five-colour palette
-      (Red / Yellow / Green / Blue / Black) and three-step width picker
-      (Thin / Med / Thick, shortcuts 1/2/3). ⌘S save, ⌘C copy, ⌘Z undo,
-      ⌘⇧Z redo, ⌘W close, Clear button.  *Still to add: Text / Counter /
-      Blur / Crop.*
+      Redact / Counter / Text** (P / L / A / R / E / H / X / N / T
+      shortcuts). Five-colour palette (Red / Yellow / Green / Blue /
+      Black) and three-step width picker (Thin / Med / Thick, shortcuts
+      1/2/3). ⌘S save, ⌘C copy, ⌘Z undo, ⌘⇧Z redo, ⌘W close, Clear
+      button.  *Still to add: Blur / Crop / custom colour picker.*
 - [ ] Color palette + custom hex; stroke width picker (1–24 px).
       *(Single red colour for now.)*
 - [~] History stack — undo only; redo is the next obvious add.

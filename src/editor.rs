@@ -41,6 +41,8 @@ mod mac {
         Ellipse,
         Highlight,
         Redact,
+        Counter,
+        Text,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,6 +98,8 @@ mod mac {
         Arrow { from: NSPoint, to: NSPoint },
         Rect { from: NSPoint, to: NSPoint },
         Ellipse { from: NSPoint, to: NSPoint },
+        Counter { center: NSPoint, number: u32 },
+        Text { origin: NSPoint, content: String },
     }
 
     /// A drawn shape plus its style. Captured at mouseDown so later changes
@@ -112,7 +116,8 @@ mod mac {
     impl Shape {
         fn from_tool(tool: Tool, start: NSPoint) -> Self {
             // Highlight and Redact are visually distinct (alpha + fill) but
-            // geometrically map onto Pen and Rect respectively.
+            // geometrically map onto Pen and Rect respectively. Counter and
+            // Text are point-anchored — content is set elsewhere.
             match tool {
                 Tool::Pen | Tool::Highlight => Shape::Pen {
                     points: vec![start],
@@ -133,6 +138,14 @@ mod mac {
                     from: start,
                     to: start,
                 },
+                Tool::Counter => Shape::Counter {
+                    center: start,
+                    number: 0,
+                },
+                Tool::Text => Shape::Text {
+                    origin: start,
+                    content: String::new(),
+                },
             }
         }
         fn update(&mut self, point: NSPoint) {
@@ -144,6 +157,8 @@ mod mac {
                 | Shape::Ellipse { to, .. } => {
                     *to = point;
                 }
+                Shape::Counter { center, .. } => *center = point,
+                Shape::Text { origin, .. } => *origin = point,
             }
         }
         fn is_meaningful(&self) -> bool {
@@ -155,6 +170,8 @@ mod mac {
                 | Shape::Ellipse { from, to } => {
                     (from.x - to.x).abs() > 2.0 || (from.y - to.y).abs() > 2.0
                 }
+                Shape::Counter { .. } => true,
+                Shape::Text { content, .. } => !content.is_empty(),
             }
         }
         fn scaled(&self, sx: f64, sy: f64) -> Self {
@@ -182,18 +199,29 @@ mod mac {
                     from: s(from),
                     to: s(to),
                 },
+                Shape::Counter { center, number } => Shape::Counter {
+                    center: s(center),
+                    number: *number,
+                },
+                Shape::Text { origin, content } => Shape::Text {
+                    origin: s(origin),
+                    content: content.clone(),
+                },
             }
         }
     }
 
     impl Annotation {
         fn from_tool(tool: Tool, start: NSPoint, color: Rgba, width: f64) -> Self {
-            // Highlight uses its fixed semi-transparent yellow + a thicker
-            // stroke. Redact is always a filled black rect.
+            // Highlight pins to its fixed semi-transparent yellow + thicker
+            // stroke. Redact is always a filled black rect. Counter is a
+            // filled coloured circle (the user's chosen colour, falling
+            // back to red on Black to keep the white number readable).
             let (color, width, fill, arrowhead) = match tool {
                 Tool::Highlight => (Rgba::HIGHLIGHT, width.max(18.0), false, false),
                 Tool::Redact => (Rgba::BLACK, 0.0, true, false),
                 Tool::Arrow => (color, width, false, true),
+                Tool::Counter => (color, width, true, false),
                 _ => (color, width, false, false),
             };
             Annotation {
@@ -237,6 +265,7 @@ mod mac {
         tool: Tool,
         color: Rgba,
         width: f64,
+        next_counter: u32,
         shapes: Vec<Annotation>,
         redo_stack: Vec<Annotation>,
         current: Option<Annotation>,
@@ -299,18 +328,32 @@ mod mac {
             #[unsafe(method(mouseDown:))]
             fn mouse_down(&self, event: &NSEvent) {
                 let location = unsafe { self.convertPoint_fromView(event.locationInWindow(), None) };
-                EDITOR.with(|slot| {
-                    if let Some(state) = slot.borrow_mut().as_mut() {
-                        state.redo_stack.clear();
-                        state.current = Some(Annotation::from_tool(
-                            state.tool,
-                            location,
-                            state.color,
-                            state.width,
-                        ));
+                let tool = EDITOR.with(|s| s.borrow().as_ref().map(|s| s.tool));
+                match tool {
+                    Some(Tool::Counter) => {
+                        place_counter(location);
+                        unsafe { self.setNeedsDisplay(true) };
                     }
-                });
-                unsafe { self.setNeedsDisplay(true) };
+                    Some(Tool::Text) => {
+                        place_text(location);
+                        unsafe { self.setNeedsDisplay(true) };
+                    }
+                    Some(_) => {
+                        EDITOR.with(|slot| {
+                            if let Some(state) = slot.borrow_mut().as_mut() {
+                                state.redo_stack.clear();
+                                state.current = Some(Annotation::from_tool(
+                                    state.tool,
+                                    location,
+                                    state.color,
+                                    state.width,
+                                ));
+                            }
+                        });
+                        unsafe { self.setNeedsDisplay(true) };
+                    }
+                    None => {}
+                }
             }
 
             #[unsafe(method(mouseDragged:))]
@@ -360,6 +403,8 @@ mod mac {
                         "e" | "E" => set_tool(Tool::Ellipse),
                         "h" | "H" => set_tool(Tool::Highlight),
                         "x" | "X" => set_tool(Tool::Redact),
+                        "n" | "N" => set_tool(Tool::Counter),
+                        "t" | "T" => set_tool(Tool::Text),
                         "1" => set_width(3.0),
                         "2" => set_width(6.0),
                         "3" => set_width(12.0),
@@ -400,6 +445,8 @@ mod mac {
                     14 => set_tool(Tool::Ellipse),
                     15 => set_tool(Tool::Highlight),
                     16 => set_tool(Tool::Redact),
+                    17 => set_tool(Tool::Counter),
+                    18 => set_tool(Tool::Text),
                     // Colour palette
                     20 => set_color(Rgba::RED),
                     21 => set_color(Rgba::YELLOW),
@@ -510,12 +557,106 @@ mod mac {
                 };
                 path.appendBezierPathWithOvalInRect(r);
             }
+            Shape::Counter { center, number } => {
+                let r = (a.width * 4.0).max(18.0);
+                let circle_rect = NSRect {
+                    origin: NSPoint {
+                        x: center.x - r,
+                        y: center.y - r,
+                    },
+                    size: NSSize {
+                        width: r * 2.0,
+                        height: r * 2.0,
+                    },
+                };
+                // Filled coloured circle with a thin white border.
+                let circle = NSBezierPath::bezierPath();
+                circle.appendBezierPathWithOvalInRect(circle_rect);
+                color.setFill();
+                circle.fill();
+                let white = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 1.0, 1.0, 1.0);
+                white.setStroke();
+                circle.setLineWidth((a.width * 0.5).max(1.5));
+                circle.stroke();
+                // Number, white, centered on the circle.
+                draw_text_centered(
+                    &format!("{number}"),
+                    *center,
+                    (r * 1.1).max(12.0),
+                    Rgba {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                );
+                return; /* skip the trailing stroke/fill below */
+            }
+            Shape::Text { origin, content } => {
+                let size = (a.width * 4.0).max(16.0);
+                draw_text_at(content, *origin, size, a.color);
+                return; /* text draws itself, no path stroke */
+            }
         }
         if a.fill {
             path.fill();
         } else {
             path.stroke();
         }
+    }
+
+    /// Build an NSDictionary holding NSFont + NSColor attributes for
+    /// NSString's drawing methods. Returned as a raw `*const AnyObject` so
+    /// it can be handed directly to `msg_send!` without wrestling with
+    /// the strict generic parameters on the typed binding.
+    unsafe fn make_text_attributes(font_size: f64, color: Rgba, bold: bool) -> Retained<NSObject> {
+        let font = if bold {
+            objc2_app_kit::NSFont::boldSystemFontOfSize(font_size)
+        } else {
+            objc2_app_kit::NSFont::systemFontOfSize(font_size)
+        };
+        let color_obj =
+            NSColor::colorWithSRGBRed_green_blue_alpha(color.r, color.g, color.b, color.a);
+        // Build NSDictionary via the class-level constructor that takes
+        // parallel keys/values arrays. Skipping the typed binding lets us
+        // mix NSFont + NSColor as values.
+        let keys: [&NSObject; 2] = [
+            &*NSString::from_str("NSFont") as &NSObject,
+            &*NSString::from_str("NSColor") as &NSObject,
+        ];
+        let vals: [&NSObject; 2] = [&*font as &NSObject, &*color_obj as &NSObject];
+        let dict: Retained<NSObject> = msg_send![
+            objc2::class!(NSDictionary),
+            dictionaryWithObjects: vals.as_ptr(),
+            forKeys: keys.as_ptr(),
+            count: 2usize,
+        ];
+        dict
+    }
+
+    /// Draw a single line of text at `origin`. Used by the Text tool.
+    unsafe fn draw_text_at(s: &str, origin: NSPoint, font_size: f64, color: Rgba) {
+        if MainThreadMarker::new().is_none() {
+            return;
+        }
+        let ns = NSString::from_str(s);
+        let attrs = make_text_attributes(font_size, color, false);
+        let _: () = msg_send![&*ns, drawAtPoint: origin, withAttributes: &*attrs];
+    }
+
+    /// Draw `s` centred (horizontally + vertically) on `center`.
+    unsafe fn draw_text_centered(s: &str, center: NSPoint, font_size: f64, color: Rgba) {
+        if MainThreadMarker::new().is_none() {
+            return;
+        }
+        let ns = NSString::from_str(s);
+        let attrs = make_text_attributes(font_size, color, true);
+        let size: NSSize = msg_send![&*ns, sizeWithAttributes: &*attrs];
+        let origin = NSPoint {
+            x: center.x - size.width / 2.0,
+            y: center.y - size.height / 2.0,
+        };
+        let _: () = msg_send![&*ns, drawAtPoint: origin, withAttributes: &*attrs];
     }
 
     // ---- Actions --------------------------------------------------------
@@ -583,6 +724,79 @@ mod mac {
                 state.width = width;
             }
         });
+    }
+
+    /// Place a numbered counter circle at `point` and commit immediately
+    /// (counters are click-to-place, not drag).
+    fn place_counter(point: NSPoint) {
+        EDITOR.with(|slot| {
+            if let Some(state) = slot.borrow_mut().as_mut() {
+                state.redo_stack.clear();
+                let n = state.next_counter;
+                state.next_counter += 1;
+                let mut a = Annotation::from_tool(Tool::Counter, point, state.color, state.width);
+                if let Shape::Counter { number, .. } = &mut a.shape {
+                    *number = n;
+                }
+                state.shapes.push(a);
+            }
+        });
+    }
+
+    /// Prompt the user for a string, then place a text annotation at `point`.
+    /// Skipped if the user cancels or enters an empty string.
+    fn place_text(point: NSPoint) {
+        let Some(content) = prompt_for_text() else {
+            return;
+        };
+        if content.is_empty() {
+            return;
+        }
+        EDITOR.with(|slot| {
+            if let Some(state) = slot.borrow_mut().as_mut() {
+                state.redo_stack.clear();
+                let mut a = Annotation::from_tool(Tool::Text, point, state.color, state.width);
+                if let Shape::Text { content: c, .. } = &mut a.shape {
+                    *c = content;
+                }
+                state.shapes.push(a);
+            }
+        });
+    }
+
+    /// Modal text-input prompt via NSAlert + NSTextField. Returns Some(string)
+    /// on OK, None on cancel.
+    fn prompt_for_text() -> Option<String> {
+        let mtm = MainThreadMarker::new()?;
+        unsafe {
+            let alert: Retained<objc2_app_kit::NSAlert> =
+                msg_send![objc2_app_kit::NSAlert::alloc(mtm), init];
+            alert.setMessageText(&NSString::from_str("Add text annotation"));
+            alert.setInformativeText(&NSString::from_str("Enter the text to draw on the image."));
+            alert.addButtonWithTitle(&NSString::from_str("Add"));
+            alert.addButtonWithTitle(&NSString::from_str("Cancel"));
+            let field: Retained<objc2_app_kit::NSTextField> =
+                objc2_app_kit::NSTextField::initWithFrame(
+                    objc2_app_kit::NSTextField::alloc(mtm),
+                    NSRect {
+                        origin: NSPoint { x: 0.0, y: 0.0 },
+                        size: NSSize {
+                            width: 280.0,
+                            height: 24.0,
+                        },
+                    },
+                );
+            field.setPlaceholderString(Some(&NSString::from_str("Your text")));
+            alert.setAccessoryView(Some(&field));
+            let resp = alert.runModal();
+            if resp == 1000 {
+                // First button (Add) = NSAlertFirstButtonReturn = 1000
+                let s = field.stringValue();
+                Some(s.to_string())
+            } else {
+                None
+            }
+        }
     }
 
     fn close_editor() {
@@ -838,8 +1052,10 @@ mod mac {
                 ("Ellipse E", 14),
                 ("Hilite H", 15),
                 ("Redact X", 16),
+                ("# N", 17),
+                ("Text T", 18),
             ];
-            let tool_btn_w = 76.0;
+            let tool_btn_w = 68.0;
             let tool_btn_h = 24.0;
             let tool_gap = 4.0;
             let tool_total =
@@ -935,6 +1151,7 @@ mod mac {
             tool: Tool::Pen,
             color: Rgba::RED,
             width: 3.0,
+            next_counter: 1,
             shapes: Vec::new(),
             redo_stack: Vec::new(),
             current: None,

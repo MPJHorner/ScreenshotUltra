@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — editor: Counter + Text + docs page
+- **Counter tool** (`N`) — click drops an auto-incrementing numbered
+  circle in the current colour with a white outline + bold white digit.
+  Numbers reset to 1 each time you open the editor.
+- **Text tool** (`T`) — click prompts for a string (native `NSAlert` +
+  `NSTextField`) and places it at the click point. Uses the current
+  colour; size derives from the stroke-width picker.
+- New **Annotation editor** docs page on the site (linked from the top
+  nav).
+- Editor file-header comment refreshed to list the full tool roster.
+
 ### Added — editor expansion
 - **Three more editor tools**: Line (no arrowhead), Highlighter
   (translucent thick yellow), Redact (filled black rectangle). Total now

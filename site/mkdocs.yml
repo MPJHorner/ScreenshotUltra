@@ -58,6 +58,7 @@ nav:
   - Quick start: quick-start.md
   - Hotkeys: hotkeys.md
   - Capture modes: capture.md
+  - Annotation editor: editor.md
   - Sinks & shell: sinks.md
   - Configuration: configuration.md
   - Logging: logging.md
