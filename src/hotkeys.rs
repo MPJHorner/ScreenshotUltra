@@ -20,6 +20,7 @@ pub enum Action {
     RepeatLast,
     OpenClipboardImage,
     ColorPicker,
+    Preferences,
 }
 
 impl Action {
@@ -35,6 +36,7 @@ impl Action {
             Action::RepeatLast => "repeat_last",
             Action::OpenClipboardImage => "open_clipboard_image",
             Action::ColorPicker => "color_picker",
+            Action::Preferences => "preferences",
         }
     }
     pub fn label(self) -> &'static str {
@@ -49,6 +51,7 @@ impl Action {
             Action::RepeatLast => "Repeat last capture",
             Action::OpenClipboardImage => "Open clipboard image",
             Action::ColorPicker => "Colour picker",
+            Action::Preferences => "Preferences…",
         }
     }
     pub fn show_tray(self) -> bool {
@@ -84,6 +87,7 @@ pub fn register_all(cfg: &Hotkeys) -> Result<Registered> {
         (Action::RepeatLast, cfg.repeat_last.clone()),
         (Action::OpenClipboardImage, cfg.open_clipboard_image.clone()),
         (Action::ColorPicker, cfg.color_picker.clone()),
+        (Action::Preferences, cfg.preferences.clone()),
     ] {
         // Empty string = intentionally unbound. Skip silently.
         if accel.trim().is_empty() {
@@ -225,8 +229,8 @@ mod tests {
         let cfg = Hotkeys::default();
         let reg = register_all(&cfg).unwrap();
         // region/window/fullscreen + pin_last + repeat_last
-        // + open_clipboard_image + color_picker = 7
-        assert_eq!(reg.actions.len(), 7);
+        // + open_clipboard_image + color_picker + preferences = 8
+        assert_eq!(reg.actions.len(), 8);
         // None should be a silent_* action since they're empty by default.
         assert!(reg.actions.iter().all(|(a, _)| !matches!(
             a,

@@ -10,6 +10,7 @@ mod eyedropper;
 mod hotkeys;
 mod logging;
 mod pin;
+mod preferences;
 mod quick_tray;
 mod settings;
 mod sinks;
@@ -139,6 +140,7 @@ fn main() -> Result<()> {
                             .arg(logging::log_path_for_reveal())
                             .status();
                     }
+                    Some(tray::MenuAction::Preferences) => preferences::show(),
                     Some(tray::MenuAction::Quit) => *control_flow = ControlFlow::Exit,
                     None => {}
                 },
@@ -292,6 +294,10 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
             eyedropper::pick();
             return;
         }
+        hotkeys::Action::Preferences => {
+            preferences::show();
+            return;
+        }
         _ => {}
     }
 
@@ -302,7 +308,8 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
         hotkeys::Action::PinLast
         | hotkeys::Action::RepeatLast
         | hotkeys::Action::OpenClipboardImage
-        | hotkeys::Action::ColorPicker => unreachable!(),
+        | hotkeys::Action::ColorPicker
+        | hotkeys::Action::Preferences => unreachable!(),
     };
     run_capture(mode, action.show_tray(), settings);
 }

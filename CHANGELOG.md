@@ -5,6 +5,36 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-05-11
+
+The **M2 complete** release. The Preferences GUI lands, finishing the
+last material item on the M2 milestone.
+
+### Added — Preferences window
+- **In-app Preferences** (default `⌃⌥⌘,`, plus tray-menu "Preferences…"):
+  a real `NSWindow` with a scrollable `NSTextView` showing the current
+  `settings.toml`. Edit in place; the **Apply** button validates the TOML
+  by parsing it through `Settings`'s serde derives, then writes back to
+  disk so the hot-reload watcher picks it up — same path as external
+  editors.
+- **Reset to Defaults** button reloads the canonical defaults into the
+  editor (doesn't save until you click Apply).
+- **Cancel** (`Esc`) or `⌘W` closes without saving.
+- Apply errors land in a native `NSAlert` — typos won't silently revert
+  your bindings.
+- Logs `preferences_apply` on successful save.
+
+### Fixed — upgrade-friendly settings parsing
+- Every hotkey slot now has an explicit per-field serde default function
+  (`default_window`, `default_pin_last`, …). Previously
+  `#[serde(default)]` fell back to `String::default()` → empty, so
+  anyone upgrading from an older settings.toml silently lost the new
+  bindings (window, pin_last, repeat_last, open_clipboard_image,
+  color_picker, preferences).
+- `Settings::load_or_default` now rewrites the file when round-tripping
+  reveals missing fields, so the next `Edit settings.toml…` shows every
+  current option.
+
 ## [0.4.1] — 2026-05-11
 
 ### Added — pin-to-screen interaction polish

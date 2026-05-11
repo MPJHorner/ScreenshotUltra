@@ -1,6 +1,6 @@
 [package]
 name = "screenshot-ultra"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.75"
 description = "A snappy, hotkey-first macOS screenshot and screen recorder. Local-first. No cloud."
@@ -32,7 +32,7 @@ thiserror = "1"
 objc2 = "0.6"
 block2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSGeometry", "NSObject", "NSValue", "NSTimer", "NSRunLoop", "NSThread"] }
-objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSPanel", "NSResponder", "NSView", "NSButton", "NSControl", "NSImage", "NSImageView", "NSScreen", "NSColor", "NSGraphics", "NSApplication", "NSCell", "NSText", "NSEvent", "NSBitmapImageRep", "NSImageRep", "NSGraphicsContext", "NSBezierPath", "NSPasteboard", "NSPasteboardItem", "NSFont", "NSStringDrawing", "NSAttributedString", "NSAlert", "NSTextField", "NSColorSampler"] }
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSPanel", "NSResponder", "NSView", "NSButton", "NSControl", "NSImage", "NSImageView", "NSScreen", "NSColor", "NSGraphics", "NSApplication", "NSCell", "NSText", "NSEvent", "NSBitmapImageRep", "NSImageRep", "NSGraphicsContext", "NSBezierPath", "NSPasteboard", "NSPasteboardItem", "NSFont", "NSStringDrawing", "NSAttributedString", "NSAlert", "NSTextField", "NSColorSampler", "NSTextView", "NSScrollView", "NSLayoutManager", "NSTextStorage", "NSTextContainer"] }
 objc2-quartz-core = { version = "0.3", features = ["CALayer", "objc2-core-foundation"] }
 objc2-core-graphics = { version = "0.3", features = ["CGColor"] }
 

@@ -53,14 +53,47 @@ fn default_tray_timeout_ms() -> u64 {
     6000
 }
 
+// Per-field default functions. We use these instead of relying on
+// `impl Default for Hotkeys` because serde's `#[serde(default)]` falls
+// back to `Default::default()` on the FIELD type (which is `String` →
+// `""`), not the parent struct. That means anyone upgrading from an
+// older config would silently lose new bindings unless we name a
+// concrete default per slot.
+fn default_region() -> String {
+    "ctrl+alt+cmd+1".into()
+}
+fn default_window() -> String {
+    "ctrl+alt+cmd+2".into()
+}
+fn default_fullscreen() -> String {
+    "ctrl+alt+cmd+3".into()
+}
+fn default_pin_last() -> String {
+    "ctrl+alt+cmd+period".into()
+}
+fn default_repeat_last() -> String {
+    "ctrl+alt+cmd+r".into()
+}
+fn default_open_clipboard_image() -> String {
+    "ctrl+alt+cmd+e".into()
+}
+fn default_color_picker() -> String {
+    "ctrl+alt+cmd+p".into()
+}
+fn default_preferences() -> String {
+    "ctrl+alt+cmd+comma".into()
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Hotkeys {
     /// Region capture with Quick Tray (the standard flow). Empty = unbound.
+    #[serde(default = "default_region")]
     pub region: String,
     /// Fullscreen capture with Quick Tray (the standard flow). Empty = unbound.
+    #[serde(default = "default_fullscreen")]
     pub fullscreen: String,
     /// Window capture with Quick Tray. Empty = unbound.
-    #[serde(default)]
+    #[serde(default = "default_window")]
     pub window: String,
     /// Region capture, silent: save to disk + clipboard, no UI. Empty = unbound.
     #[serde(default)]
@@ -72,19 +105,22 @@ pub struct Hotkeys {
     #[serde(default)]
     pub silent_window: String,
     /// Pin the most recent capture to the screen. Empty = unbound.
-    #[serde(default)]
+    #[serde(default = "default_pin_last")]
     pub pin_last: String,
     /// Repeat the previous capture mode. Empty = unbound.
-    #[serde(default)]
+    #[serde(default = "default_repeat_last")]
     pub repeat_last: String,
     /// Paste the clipboard's image and run it through the Quick Tray flow.
     /// Empty = unbound.
-    #[serde(default)]
+    #[serde(default = "default_open_clipboard_image")]
     pub open_clipboard_image: String,
     /// Show macOS's system colour-sampler magnifier; copies the picked
     /// hex onto the clipboard. Empty = unbound.
-    #[serde(default)]
+    #[serde(default = "default_color_picker")]
     pub color_picker: String,
+    /// Open the Preferences window. Empty = unbound.
+    #[serde(default = "default_preferences")]
+    pub preferences: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -130,6 +166,7 @@ impl Default for Hotkeys {
             repeat_last: "ctrl+alt+cmd+r".into(),
             open_clipboard_image: "ctrl+alt+cmd+e".into(),
             color_picker: "ctrl+alt+cmd+p".into(),
+            preferences: "ctrl+alt+cmd+comma".into(),
         }
     }
 }
@@ -152,6 +189,16 @@ impl Settings {
                 .with_context(|| format!("reading {}", path.display()))?;
             let parsed: Settings =
                 toml::from_str(&raw).with_context(|| format!("parsing {}", path.display()))?;
+            // If the on-disk file is missing fields (e.g. user upgraded from
+            // an older version), rewrite it so all current options show up
+            // next time they edit. We only rewrite when the round-tripped
+            // TOML differs from the raw — preserves comments and ordering
+            // when the file is already up to date.
+            if let Ok(round_trip) = toml::to_string_pretty(&parsed) {
+                if round_trip.trim() != raw.trim() {
+                    let _ = std::fs::write(&path, round_trip);
+                }
+            }
             Ok(parsed)
         } else {
             let s = Settings::default();

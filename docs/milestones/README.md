@@ -7,7 +7,7 @@ lands.
 | Milestone | Title              | Status        |
 |-----------|--------------------|---------------|
 | [M1](M1-press-the-key.md)        | Press the key       | ✅ shipped (v0.1.0) |
-| [M2](M2-annotate.md)             | Annotate            | ✅ nearly complete — only Preferences GUI deferred |
+| [M2](M2-annotate.md)             | Annotate            | ✅ complete (v0.5.0)        |
 | [M3](M3-record.md)               | Record              | ⏳ planned    |
 | [M4](M4-scroll-and-beautify.md)  | Scroll & Beautify   | ⏳ planned    |
 | [M5](M5-ocr-and-polish.md)       | OCR & polish        | ⏳ planned    |

@@ -66,6 +66,8 @@ Every binding is rebindable in `~/Library/Application Support/ScreenshotUltra/se
 | Open clipboard image         | `⌃⌥⌘E`  | Pastes a clipboard image into the same flow |
 | Repeat last                  | `⌃⌥⌘R`  | Re-runs the previous mode                   |
 | Pin last to screen           | `⌃⌥⌘.`  | Floating always-on-top window               |
+| Colour picker (eyedropper)   | `⌃⌥⌘P`  | Copies the picked `#rrggbb` to clipboard    |
+| Preferences                  | `⌃⌥⌘,`  | In-app `settings.toml` editor               |
 | Silent variants              | _unset_ | Set `silent_*` in `settings.toml` to enable |
 
 All bindings live under `[hotkeys]` in `settings.toml`. Full syntax reference on the [hotkeys docs page](https://mpjhorner.github.io/ScreenshotUltra/hotkeys/).

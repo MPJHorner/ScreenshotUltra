@@ -1,6 +1,6 @@
 # M2 — Annotate
 
-**Status:** ✅ nearly complete (only Preferences GUI deferred)
+**Status:** ✅ complete (v0.5.0)
 
 **Goal:** A native annotation editor that opens immediately after every
 capture (configurable), plus the Quick Tray, Pin-to-screen, and the Window
@@ -32,11 +32,14 @@ capture mode.
 - [x] **Silent capture flow** — separate `silent_region` /
       `silent_window` / `silent_fullscreen` hotkey slots so users can
       pick tray-or-no-tray per hotkey.
-- [ ] **Preferences GUI window** (general + hotkeys tabs). Currently
-      `settings.toml` covers everything; the file is hot-reloaded within
-      ~1 s of any save. A GUI on top is the only material M2 item still
-      pending — deferred since the TOML path has proved adequate during
-      M2 development.
+- [x] **Preferences GUI window** — pragmatic in-app editor that shows
+      the current `settings.toml` in an `NSTextView` (monospace font,
+      undo, no smart-quote substitution). **Apply** validates the TOML
+      through `Settings`'s serde derives before saving, **Reset to
+      Defaults** repopulates the editor (doesn't save until Apply),
+      **Cancel**/`Esc`/`⌘W` closes without saving. Same as editing
+      `settings.toml` directly but in-app and with validation — and any
+      new setting we add lights up here for free.
 
 ## Beyond plan.md §13 — bonus M2 features
 
