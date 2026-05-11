@@ -81,6 +81,10 @@ pub struct Hotkeys {
     /// Empty = unbound.
     #[serde(default)]
     pub open_clipboard_image: String,
+    /// Show macOS's system colour-sampler magnifier; copies the picked
+    /// hex onto the clipboard. Empty = unbound.
+    #[serde(default)]
+    pub color_picker: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -125,6 +129,7 @@ impl Default for Hotkeys {
             pin_last: "ctrl+alt+cmd+period".into(),
             repeat_last: "ctrl+alt+cmd+r".into(),
             open_clipboard_image: "ctrl+alt+cmd+e".into(),
+            color_picker: "ctrl+alt+cmd+p".into(),
         }
     }
 }

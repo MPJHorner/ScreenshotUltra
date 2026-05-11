@@ -5,6 +5,21 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — eyedropper, tooltips, aperture menu-bar icon
+- **Eyedropper colour picker** (default `⌃⌥⌘P`) — shows macOS's
+  `NSColorSampler` magnifier; clicking any on-screen pixel copies its
+  sRGB hex (`#rrggbb`) onto the clipboard and emits an `eyedropper_pick`
+  NDJSON event. New `src/eyedropper.rs`. Uses `block2::RcBlock` to bridge
+  the Cocoa selection-handler block.
+- **Tooltips on every editor button** — hover any tool / colour / width
+  / action button to see a one-line hint with the shortcut.
+- **Aperture menu-bar icon** — replaced the programmatic camera glyph
+  with a six-blade aperture iris that matches the .app icon (which is
+  itself an aperture). Still procedurally drawn at 22×22; still a
+  template image so macOS tints it for the menu bar's light/dark mode.
+
 ## [0.4.0] — 2026-05-11
 
 The "annotate everything, then some" release. The annotation editor now

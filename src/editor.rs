@@ -1365,25 +1365,28 @@ mod mac {
         let mut color_buttons: Vec<(Rgba, Retained<NSButton>)> = Vec::new();
         let mut width_buttons: Vec<(f64, Retained<NSButton>)> = Vec::new();
 
-        let make_button = |label: &str, tag: isize, x: f64, y: f64, w: f64, h: f64| {
-            let title = NSString::from_str(label);
-            unsafe {
-                let rect = NSRect {
-                    origin: NSPoint { x, y },
-                    size: NSSize {
-                        width: w,
-                        height: h,
-                    },
-                };
-                let b: Retained<NSButton> = NSButton::initWithFrame(NSButton::alloc(mtm), rect);
-                b.setTitle(&title);
-                b.setBezelStyle(NSBezelStyle::Push);
-                b.setTag(tag);
-                b.setTarget(Some(handler.as_ref()));
-                b.setAction(Some(sel!(buttonClicked:)));
-                b
-            }
-        };
+        let make_button =
+            |label: &str, tooltip: &str, tag: isize, x: f64, y: f64, w: f64, h: f64| {
+                let title = NSString::from_str(label);
+                let tip = NSString::from_str(tooltip);
+                unsafe {
+                    let rect = NSRect {
+                        origin: NSPoint { x, y },
+                        size: NSSize {
+                            width: w,
+                            height: h,
+                        },
+                    };
+                    let b: Retained<NSButton> = NSButton::initWithFrame(NSButton::alloc(mtm), rect);
+                    b.setTitle(&title);
+                    b.setBezelStyle(NSBezelStyle::Push);
+                    b.setTag(tag);
+                    b.setTarget(Some(handler.as_ref()));
+                    b.setAction(Some(sel!(buttonClicked:)));
+                    b.setToolTip(Some(&tip));
+                    b
+                }
+            };
 
         if let Some(content_view) = window.contentView() {
             unsafe { content_view.addSubview(&canvas) };
@@ -1393,17 +1396,47 @@ mod mac {
             let row_y_bot = TOOLBAR_H + view_h + 8.0;
 
             let tools_meta = [
-                ("Pen P", 10, Tool::Pen),
-                ("Line L", 11, Tool::Line),
-                ("Arrow A", 12, Tool::Arrow),
-                ("Rect R", 13, Tool::Rect),
-                ("Ellipse E", 14, Tool::Ellipse),
-                ("Hilite H", 15, Tool::Highlight),
-                ("Redact X", 16, Tool::Redact),
-                ("# N", 17, Tool::Counter),
-                ("Text T", 18, Tool::Text),
-                ("Blur B", 19, Tool::Blur),
-                ("Crop C", 25, Tool::Crop),
+                ("Pen P", "Freehand pen (P)", 10, Tool::Pen),
+                ("Line L", "Straight line (L)", 11, Tool::Line),
+                (
+                    "Arrow A",
+                    "Arrow with calculated arrowhead (A)",
+                    12,
+                    Tool::Arrow,
+                ),
+                ("Rect R", "Stroked rectangle (R)", 13, Tool::Rect),
+                ("Ellipse E", "Stroked ellipse (E)", 14, Tool::Ellipse),
+                (
+                    "Hilite H",
+                    "Translucent yellow highlighter (H)",
+                    15,
+                    Tool::Highlight,
+                ),
+                (
+                    "Redact X",
+                    "Filled black rectangle for hiding info (X)",
+                    16,
+                    Tool::Redact,
+                ),
+                (
+                    "# N",
+                    "Numbered counter — click to drop (N)",
+                    17,
+                    Tool::Counter,
+                ),
+                (
+                    "Text T",
+                    "Text — click prompts for the string (T)",
+                    18,
+                    Tool::Text,
+                ),
+                ("Blur B", "Pixelate a region (B)", 19, Tool::Blur),
+                (
+                    "Crop C",
+                    "Crop — drag, release to apply (C). Destructive.",
+                    25,
+                    Tool::Crop,
+                ),
             ];
             let tool_btn_w = 58.0;
             let tool_btn_h = 24.0;
@@ -1411,9 +1444,10 @@ mod mac {
             let tool_total = (tool_btn_w * tools_meta.len() as f64)
                 + (tool_gap * (tools_meta.len() as f64 - 1.0));
             let tool_start_x = (view_w - tool_total).max(8.0) / 2.0;
-            for (i, (label, tag, tool)) in tools_meta.iter().enumerate() {
+            for (i, (label, tip, tag, tool)) in tools_meta.iter().enumerate() {
                 let btn = make_button(
                     label,
+                    tip,
                     *tag,
                     tool_start_x + (tool_btn_w + tool_gap) * i as f64,
                     row_y_top,
@@ -1426,16 +1460,16 @@ mod mac {
 
             // Colour swatches + width on row 2.
             let palette = [
-                ("● Red", 20, Rgba::RED),
-                ("● Yellow", 21, Rgba::YELLOW),
-                ("● Green", 22, Rgba::GREEN),
-                ("● Blue", 23, Rgba::BLUE),
-                ("● Black", 24, Rgba::BLACK),
+                ("● Red", "Red", 20, Rgba::RED),
+                ("● Yellow", "Yellow", 21, Rgba::YELLOW),
+                ("● Green", "Green", 22, Rgba::GREEN),
+                ("● Blue", "Blue", 23, Rgba::BLUE),
+                ("● Black", "Black", 24, Rgba::BLACK),
             ];
             let widths_meta = [
-                ("Thin 1", 30, 3.0_f64),
-                ("Med 2", 31, 6.0),
-                ("Thick 3", 32, 12.0),
+                ("Thin 1", "Thin — 3 px (1)", 30, 3.0_f64),
+                ("Med 2", "Med — 6 px (2)", 31, 6.0),
+                ("Thick 3", "Thick — 12 px (3)", 32, 12.0),
             ];
             let p_w = 70.0;
             let w_w = 60.0;
@@ -1446,15 +1480,15 @@ mod mac {
                 + (w_w * widths_meta.len() as f64)
                 + (gap2 * (widths_meta.len() as f64 - 1.0));
             let mut x = (view_w - row2_total).max(8.0) / 2.0;
-            for (label, tag, color) in palette.iter() {
-                let btn = make_button(label, *tag, x, row_y_bot, p_w, tool_btn_h);
+            for (label, tip, tag, color) in palette.iter() {
+                let btn = make_button(label, tip, *tag, x, row_y_bot, p_w, tool_btn_h);
                 unsafe { content_view.addSubview(&btn) };
                 color_buttons.push((*color, btn));
                 x += p_w + gap2;
             }
             x += 16.0;
-            for (label, tag, w) in widths_meta.iter() {
-                let btn = make_button(label, *tag, x, row_y_bot, w_w, tool_btn_h);
+            for (label, tip, tag, w) in widths_meta.iter() {
+                let btn = make_button(label, tip, *tag, x, row_y_bot, w_w, tool_btn_h);
                 unsafe { content_view.addSubview(&btn) };
                 width_buttons.push((*w, btn));
                 x += w_w + gap2;
@@ -1462,12 +1496,20 @@ mod mac {
 
             // Bottom action row.
             let actions = [
-                ("Save ⌘S", 1),
-                ("Copy ⌘C", 2),
-                ("Undo ⌘Z", 3),
-                ("Redo ⌘⇧Z", 4),
-                ("Clear", 5),
-                ("Done ⌘W", 6),
+                (
+                    "Save ⌘S",
+                    "Save the annotated PNG over the original (⌘S)",
+                    1,
+                ),
+                (
+                    "Copy ⌘C",
+                    "Copy the annotated image to the clipboard (⌘C)",
+                    2,
+                ),
+                ("Undo ⌘Z", "Undo the last shape (⌘Z)", 3),
+                ("Redo ⌘⇧Z", "Redo (⌘⇧Z)", 4),
+                ("Clear", "Remove every annotation", 5),
+                ("Done ⌘W", "Close the editor (⌘W)", 6),
             ];
             let act_btn_w = 88.0;
             let act_btn_h = 24.0;
@@ -1476,9 +1518,10 @@ mod mac {
                 (act_btn_w * actions.len() as f64) + (act_gap * (actions.len() as f64 - 1.0));
             let act_start_x = (view_w - act_total) / 2.0;
             let act_y = (TOOLBAR_H - act_btn_h) / 2.0;
-            for (i, (label, tag)) in actions.iter().enumerate() {
+            for (i, (label, tip, tag)) in actions.iter().enumerate() {
                 let btn = make_button(
                     label,
+                    tip,
                     *tag,
                     act_start_x + (act_btn_w + act_gap) * i as f64,
                     act_y,

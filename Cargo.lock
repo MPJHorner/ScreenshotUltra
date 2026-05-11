@@ -1802,6 +1802,7 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "arboard",
+ "block2 0.6.2",
  "chrono",
  "dirs 5.0.1",
  "global-hotkey",

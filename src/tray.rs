@@ -160,37 +160,48 @@ pub fn menu_action(id: &MenuId) -> Option<MenuAction> {
     }
 }
 
-/// 22×22 monochrome glyph drawn in code: a small camera-like square with a
-/// circular lens. Template-style (alpha-only), so macOS tints it automatically.
+/// 22×22 monochrome aperture glyph (matches the .app icon's iris).
+/// Template-style (alpha-only) so macOS tints it automatically for light /
+/// dark menu bars.
+///
+/// Geometry: an outer ring at radius 9, an inner lens hole at radius 3.5,
+/// and six radial "blades" — pixels in the annular region (4 < r < 9) whose
+/// angle is close to one of six evenly-spaced 60° spokes get cleared so the
+/// blades read as gaps. Result: a recognisable camera-aperture silhouette
+/// at the macOS menu-bar size.
 fn make_icon() -> Icon {
     const SIZE: u32 = 22;
     let mut rgba = vec![0u8; (SIZE * SIZE * 4) as usize];
-    let cx = SIZE as i32 / 2;
-    let cy = SIZE as i32 / 2;
-    for y in 0..SIZE as i32 {
-        for x in 0..SIZE as i32 {
-            let i = ((y * SIZE as i32 + x) * 4) as usize;
-            // outer body: rounded square 2..20
-            let body = (2..=19).contains(&x) && (5..=18).contains(&y);
-            // viewfinder bump on top
-            let bump = (7..=12).contains(&x) && (3..=5).contains(&y);
-            // lens circle (transparent inner ring)
-            let dx = x - cx;
-            let dy = y - cy - 1;
-            let r2 = dx * dx + dy * dy;
-            let lens_outer = r2 <= 5 * 5;
-            let lens_inner = r2 <= 3 * 3;
+    let center = (SIZE as f32 - 1.0) / 2.0;
+    let r_outer = 9.5_f32;
+    let r_inner = 3.5_f32;
+    let blade_w = 0.45_f32; /* spoke half-width in radians */
 
-            let on = (body || bump) && !lens_inner;
-            // Anti-alias the lens edge a touch.
-            let alpha = if on {
-                if lens_outer && !lens_inner {
-                    255
-                } else {
-                    230
-                }
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let i = ((y * SIZE + x) * 4) as usize;
+            let dx = x as f32 - center;
+            let dy = y as f32 - center;
+            let r = (dx * dx + dy * dy).sqrt();
+
+            // Outside the aperture circle or inside the lens hole → empty.
+            if r > r_outer || r < r_inner {
+                continue;
+            }
+            // Six spokes at 30°, 90°, 150°, 210°, 270°, 330° (offset 30° so
+            // we get a hexagonal aperture, not a square one).
+            let theta = dy.atan2(dx).rem_euclid(std::f32::consts::FRAC_PI_3);
+            let dist_to_spoke = (theta - std::f32::consts::FRAC_PI_6).abs();
+            if dist_to_spoke < blade_w {
+                continue; /* leave this pixel transparent — it's a blade gap */
+            }
+            // Anti-alias the outer edge.
+            let alpha = if r > r_outer - 0.6 {
+                (((r_outer - r) / 0.6).clamp(0.0, 1.0) * 255.0) as u8
+            } else if r < r_inner + 0.6 {
+                (((r - r_inner) / 0.6).clamp(0.0, 1.0) * 255.0) as u8
             } else {
-                0
+                255
             };
             rgba[i] = 0;
             rgba[i + 1] = 0;

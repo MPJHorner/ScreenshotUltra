@@ -6,6 +6,7 @@
 mod about;
 mod capture;
 mod editor;
+mod eyedropper;
 mod hotkeys;
 mod logging;
 mod pin;
@@ -287,6 +288,10 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
             }
             return;
         }
+        hotkeys::Action::ColorPicker => {
+            eyedropper::pick();
+            return;
+        }
         _ => {}
     }
 
@@ -296,7 +301,8 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
         hotkeys::Action::Window | hotkeys::Action::SilentWindow => CaptureMode::Window,
         hotkeys::Action::PinLast
         | hotkeys::Action::RepeatLast
-        | hotkeys::Action::OpenClipboardImage => unreachable!(),
+        | hotkeys::Action::OpenClipboardImage
+        | hotkeys::Action::ColorPicker => unreachable!(),
     };
     run_capture(mode, action.show_tray(), settings);
 }

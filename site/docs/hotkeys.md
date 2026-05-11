@@ -13,6 +13,7 @@ fullscreen             = "ctrl+alt+cmd+3"   # Fullscreen (Quick Tray)
 open_clipboard_image   = "ctrl+alt+cmd+e"   # Paste clipboard image
 repeat_last            = "ctrl+alt+cmd+r"   # Repeat previous mode
 pin_last               = "ctrl+alt+cmd+."   # Pin most recent capture
+color_picker           = "ctrl+alt+cmd+p"   # Eyedropper → hex on clipboard
 silent_region          = ""                 # unbound by default
 silent_window          = ""                 # unbound by default
 silent_fullscreen      = ""                 # unbound by default
@@ -74,3 +75,4 @@ These are the keys you set under `[hotkeys]` in `settings.toml`:
 | `pin_last`              | Pin the most recent capture as a floating window              |
 | `repeat_last`           | Re-run the previous mode with the same tray-or-silent flag    |
 | `open_clipboard_image`  | Paste a clipboard image into the Quick Tray flow              |
+| `color_picker`          | Show macOS's colour sampler; copies the picked hex            |
