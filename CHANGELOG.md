@@ -5,7 +5,18 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.1] — 2026-05-11
+
+### Added — pin-to-screen interaction polish
+- **Scroll-wheel opacity** — hover any pinned window and scroll to dim
+  it (alpha 1.0 → 0.3). Lets you keep a pin visible while reading
+  through it.
+- **⌘+ / ⌘- zoom** — scales the pin in place around its centre.
+- **⌫ / ⌫-forward / Esc closes the pin** — quick dismiss without
+  reaching for the title-bar close button.
+- **⌘0 resets alpha to 1.0** for when you've dimmed too far.
+- Implemented as a transparent `PinControl` `NSView` overlay on top of
+  the image view, made first responder so it gets scroll + key events.
 
 ### Added — eyedropper, tooltips, aperture menu-bar icon
 - **Eyedropper colour picker** (default `⌃⌥⌘P`) — shows macOS's

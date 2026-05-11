@@ -20,16 +20,102 @@ mod mac {
     use std::path::Path;
 
     use objc2::rc::Retained;
-    use objc2::{msg_send, AllocAnyThread, MainThreadMarker, MainThreadOnly};
+    use objc2::{define_class, msg_send, AllocAnyThread, MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
-        NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSFloatingWindowLevel,
-        NSImage, NSImageScaling, NSImageView, NSWindow, NSWindowStyleMask,
+        NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSEvent,
+        NSFloatingWindowLevel, NSImage, NSImageScaling, NSImageView, NSView, NSWindow,
+        NSWindowStyleMask,
     };
     use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSURL};
 
     // Keep pin windows alive so they don't drop and close immediately.
     thread_local! {
         static PINS: RefCell<Vec<Retained<NSWindow>>> = const { RefCell::new(Vec::new()) };
+    }
+
+    define_class!(
+        /// Receives mouse + key events for a pin window. Overrides
+        /// `scrollWheel:` (vertical scroll changes alpha) and `keyDown:`
+        /// (⌫ / Esc close, ⌘+ / ⌘- zoom).
+        #[unsafe(super(NSView))]
+        #[name = "STUPinControl"]
+        #[derive(Debug)]
+        struct PinControl;
+
+        impl PinControl {
+            #[unsafe(method(acceptsFirstResponder))]
+            fn accepts_first_responder(&self) -> bool {
+                true
+            }
+
+            #[unsafe(method(scrollWheel:))]
+            fn scroll_wheel(&self, event: &NSEvent) {
+                let dy = unsafe { event.deltaY() };
+                if let Some(win) = unsafe { self.window() } {
+                    let cur = unsafe { win.alphaValue() };
+                    // 1.0 = opaque, 0.3 = barely visible. Step ~5% per click.
+                    let next = (cur + (dy * 0.04)).clamp(0.3, 1.0);
+                    unsafe { win.setAlphaValue(next) };
+                }
+            }
+
+            #[unsafe(method(keyDown:))]
+            fn key_down(&self, event: &NSEvent) {
+                let chars = unsafe { event.charactersIgnoringModifiers() };
+                let s = chars.map(|c| c.to_string()).unwrap_or_default();
+                let mods = unsafe { event.modifierFlags() };
+                let cmd = mods.contains(objc2_app_kit::NSEventModifierFlags::Command);
+                let Some(win) = (unsafe { self.window() }) else { return };
+                match s.as_str() {
+                    // Backspace / Delete-forward: close the pin.
+                    "\u{8}" | "\u{7f}" | "\u{1b}" => {
+                        let _ = win;
+                        close_pin(&self.window().unwrap());
+                    }
+                    "=" | "+" if cmd => zoom(&win, 1.10),
+                    "-" if cmd => zoom(&win, 1.0 / 1.10),
+                    "0" if cmd => reset_alpha(&win),
+                    _ => {}
+                }
+            }
+        }
+    );
+
+    fn close_pin(win: &NSWindow) {
+        unsafe {
+            win.orderOut(None);
+            win.close();
+        }
+        PINS.with(|v| {
+            v.borrow_mut().retain(|w| {
+                // NSObject pointer identity is fine for our purposes.
+                !std::ptr::eq(&**w as *const NSWindow, win as *const NSWindow)
+            })
+        });
+    }
+
+    fn zoom(win: &NSWindow, factor: f64) {
+        let frame = unsafe { win.frame() };
+        // Anchor zoom on the window's centre so it scales in place.
+        let cx = frame.origin.x + frame.size.width / 2.0;
+        let cy = frame.origin.y + frame.size.height / 2.0;
+        let new_w = (frame.size.width * factor).clamp(120.0, 4000.0);
+        let new_h = (frame.size.height * factor).clamp(80.0, 3000.0);
+        let new_frame = NSRect {
+            origin: NSPoint {
+                x: cx - new_w / 2.0,
+                y: cy - new_h / 2.0,
+            },
+            size: NSSize {
+                width: new_w,
+                height: new_h,
+            },
+        };
+        unsafe { win.setFrame_display_animate(new_frame, true, true) };
+    }
+
+    fn reset_alpha(win: &NSWindow) {
+        unsafe { win.setAlphaValue(1.0) };
     }
 
     /// Default pin window size. We'll later scale to image aspect ratio.
@@ -117,6 +203,21 @@ mod mac {
                 v
             };
             unsafe { content_view.addSubview(&image_view) };
+
+            // Overlay an invisible PinControl to intercept scroll / keyDown.
+            // It sits *above* the image view and accepts first responder.
+            let control: Retained<PinControl> = unsafe {
+                let alloc = PinControl::alloc(mtm);
+                msg_send![alloc, initWithFrame: view_rect]
+            };
+            unsafe {
+                control.setAutoresizingMask(
+                    objc2_app_kit::NSAutoresizingMaskOptions::ViewWidthSizable
+                        | objc2_app_kit::NSAutoresizingMaskOptions::ViewHeightSizable,
+                );
+                content_view.addSubview(&control);
+                window.makeFirstResponder(Some(&control));
+            }
         }
 
         unsafe {
