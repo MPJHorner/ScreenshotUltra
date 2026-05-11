@@ -1,11 +1,9 @@
 // Annotation editor. Opens the captured image in an NSWindow with a custom
 // canvas; supports Pen / Line / Arrow / Rectangle / Ellipse / Highlighter /
-// Redact / Counter / Text / Blur tools, a five-colour palette, and a
-// three-step stroke-width picker. ⌘S saves the annotated PNG over the
+// Redact / Counter / Text / Blur / Crop tools, a five-colour palette, and
+// a three-step stroke-width picker. ⌘S saves the annotated PNG over the
 // original, ⌘C copies it to the clipboard, ⌘Z / ⌘⇧Z undo/redo, ⌘W closes.
 // Toolbars mirror the keyboard shortcuts.
-//
-// Remaining tools planned: Crop, custom colour picker.
 
 #[cfg(not(target_os = "macos"))]
 pub fn open(_image_path: &std::path::Path) {}
@@ -44,6 +42,7 @@ mod mac {
         Counter,
         Text,
         Blur,
+        Crop,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq)]
@@ -152,6 +151,10 @@ mod mac {
                     from: start,
                     to: start,
                 },
+                Tool::Crop => Shape::Rect {
+                    from: start,
+                    to: start,
+                },
             }
         }
         fn update(&mut self, point: NSPoint) {
@@ -234,6 +237,10 @@ mod mac {
                 Tool::Redact => (Rgba::BLACK, 0.0, true, false),
                 Tool::Arrow => (color, width, false, true),
                 Tool::Counter => (color, width, true, false),
+                // Crop draws as a yellow guide rectangle while the user
+                // drags. mouseUp consumes it and replaces the image instead
+                // of committing the rect as an annotation.
+                Tool::Crop => (Rgba::YELLOW, 2.0, false, false),
                 _ => (color, width, false, false),
             };
             Annotation {
@@ -383,6 +390,30 @@ mod mac {
 
             #[unsafe(method(mouseUp:))]
             fn mouse_up(&self, _event: &NSEvent) {
+                // Crop tool is special: the active rect defines the new
+                // image bounds rather than turning into an annotation.
+                let is_crop = EDITOR.with(|s| {
+                    s.borrow().as_ref().map(|s| s.tool == Tool::Crop).unwrap_or(false)
+                });
+                if is_crop {
+                    let rect = EDITOR.with(|slot| {
+                        if let Some(state) = slot.borrow_mut().as_mut() {
+                            if let Some(a) = state.current.take() {
+                                if a.is_meaningful() {
+                                    if let Shape::Rect { from, to } = a.shape {
+                                        return Some(rect_from_two_points(from, to));
+                                    }
+                                }
+                            }
+                        }
+                        None
+                    });
+                    if let Some(rect) = rect {
+                        apply_crop(rect);
+                    }
+                    unsafe { self.setNeedsDisplay(true) };
+                    return;
+                }
                 EDITOR.with(|slot| {
                     if let Some(state) = slot.borrow_mut().as_mut() {
                         if let Some(s) = state.current.take() {
@@ -418,6 +449,7 @@ mod mac {
                         "n" | "N" => set_tool(Tool::Counter),
                         "t" | "T" => set_tool(Tool::Text),
                         "b" | "B" => set_tool(Tool::Blur),
+                        "c" | "C" => set_tool(Tool::Crop),
                         "1" => set_width(3.0),
                         "2" => set_width(6.0),
                         "3" => set_width(12.0),
@@ -461,6 +493,7 @@ mod mac {
                     17 => set_tool(Tool::Counter),
                     18 => set_tool(Tool::Text),
                     19 => set_tool(Tool::Blur),
+                    25 => set_tool(Tool::Crop),
                     // Colour palette
                     20 => set_color(Rgba::RED),
                     21 => set_color(Rgba::YELLOW),
@@ -1049,6 +1082,156 @@ mod mac {
         data.to_vec()
     }
 
+    fn rect_from_two_points(a: NSPoint, b: NSPoint) -> NSRect {
+        NSRect {
+            origin: NSPoint {
+                x: a.x.min(b.x),
+                y: a.y.min(b.y),
+            },
+            size: NSSize {
+                width: (a.x - b.x).abs(),
+                height: (a.y - b.y).abs(),
+            },
+        }
+    }
+
+    /// Crop the current editor image to `view_rect` (view coordinates),
+    /// resize the canvas to match the new aspect ratio, and clear all
+    /// existing annotations (they wouldn't line up with the new bounds).
+    fn apply_crop(view_rect: NSRect) {
+        let Some(mtm) = MainThreadMarker::new() else {
+            return;
+        };
+        let (image, view_size, pixel_size) = match EDITOR.with(|slot| {
+            let s = slot.borrow();
+            let st = s.as_ref()?;
+            Some((st.image.clone(), st.view_size, st.image_pixel_size))
+        }) {
+            Some(t) => t,
+            None => return,
+        };
+        let sx = pixel_size.width / view_size.width.max(1.0);
+        let sy = pixel_size.height / view_size.height.max(1.0);
+        let pixel_rect = NSRect {
+            origin: NSPoint {
+                x: view_rect.origin.x * sx,
+                y: view_rect.origin.y * sy,
+            },
+            size: NSSize {
+                width: view_rect.size.width * sx,
+                height: view_rect.size.height * sy,
+            },
+        };
+        let Some(cropped) = crop_image(mtm, &image, pixel_rect) else {
+            return;
+        };
+        let new_pixel_size = unsafe { cropped.size() };
+
+        EDITOR.with(|slot| {
+            if let Some(state) = slot.borrow_mut().as_mut() {
+                state.image = cropped;
+                state.image_pixel_size = new_pixel_size;
+                // Refit the canvas to the new aspect ratio while keeping
+                // the longer axis at the prior canvas size, then resize
+                // the window to match.
+                let max_w = state.view_size.width;
+                let max_h = state.view_size.height;
+                let scale = (max_w / new_pixel_size.width)
+                    .min(max_h / new_pixel_size.height)
+                    .min(1.0);
+                let new_view = NSSize {
+                    width: (new_pixel_size.width * scale).max(120.0),
+                    height: (new_pixel_size.height * scale).max(80.0),
+                };
+                state.view_size = new_view;
+                state.shapes.clear();
+                state.redo_stack.clear();
+                state.current = None;
+                // Resize the window's content view to match.
+                unsafe {
+                    let cur = state.window.frame();
+                    let chrome_h = cur.size.height - max_h; /* toolbars */
+                    let new_frame = NSRect {
+                        origin: cur.origin,
+                        size: NSSize {
+                            width: new_view.width,
+                            height: new_view.height + chrome_h,
+                        },
+                    };
+                    state.window.setFrame_display_animate(new_frame, true, true);
+                    let canvas_rect = NSRect {
+                        origin: NSPoint {
+                            x: 0.0,
+                            y: TOOLBAR_H,
+                        },
+                        size: new_view,
+                    };
+                    state.canvas.setFrame(canvas_rect);
+                    state.canvas.setNeedsDisplay(true);
+                }
+            }
+        });
+        crate::logging::event(serde_json::json!({
+            "evt": "editor_crop",
+            "new_w": new_pixel_size.width,
+            "new_h": new_pixel_size.height,
+        }));
+    }
+
+    /// Create a new NSImage by copying the `crop` rect (in pixels) out of
+    /// `image` into a fresh NSBitmapImageRep.
+    fn crop_image(
+        _mtm: MainThreadMarker,
+        image: &NSImage,
+        crop: NSRect,
+    ) -> Option<Retained<NSImage>> {
+        let w = crop.size.width as isize;
+        let h = crop.size.height as isize;
+        if w <= 0 || h <= 0 {
+            return None;
+        }
+        unsafe {
+            let bitmap = NSBitmapImageRep::initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bitmapFormat_bytesPerRow_bitsPerPixel(
+                NSBitmapImageRep::alloc(),
+                std::ptr::null_mut(),
+                w,
+                h,
+                8,
+                4,
+                true,
+                false,
+                objc2_app_kit::NSDeviceRGBColorSpace,
+                objc2_app_kit::NSBitmapFormat::empty(),
+                0,
+                0,
+            )?;
+            let ctx = NSGraphicsContext::graphicsContextWithBitmapImageRep(&bitmap)?;
+            NSGraphicsContext::saveGraphicsState_class();
+            NSGraphicsContext::setCurrentContext(Some(&ctx));
+            let dest = NSRect {
+                origin: NSPoint { x: 0.0, y: 0.0 },
+                size: NSSize {
+                    width: w as f64,
+                    height: h as f64,
+                },
+            };
+            image.drawInRect_fromRect_operation_fraction(
+                dest,
+                crop,
+                objc2_app_kit::NSCompositingOperation::SourceOver,
+                1.0,
+            );
+            NSGraphicsContext::restoreGraphicsState_class();
+
+            let new_img: Retained<NSImage> = msg_send![
+                NSImage::alloc(),
+                initWithSize: NSSize { width: w as f64, height: h as f64 }
+            ];
+            new_img.addRepresentation(&bitmap);
+            Some(new_img)
+        }
+    }
+
     // ---- Window construction --------------------------------------------
 
     const TOOLBAR_H: f64 = 40.0;
@@ -1179,8 +1362,9 @@ mod mac {
                 ("# N", 17),
                 ("Text T", 18),
                 ("Blur B", 19),
+                ("Crop C", 25),
             ];
-            let tool_btn_w = 62.0;
+            let tool_btn_w = 58.0;
             let tool_btn_h = 24.0;
             let tool_gap = 4.0;
             let tool_total =

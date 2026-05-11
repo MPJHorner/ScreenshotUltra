@@ -11,12 +11,13 @@ capture mode.
 - [~] Editor window — native `NSWindow` + custom `CanvasView` via `objc2`.
       **Tools shipped: Pen / Line / Arrow / Rect / Ellipse / Highlighter /
       Redact / Counter / Text** (P / L / A / R / E / H / X / N / T
-      shortcuts) **plus Blur (B)** — pixelate-style via nearest-neighbour
-      downscale/upscale on a sub-region of the source image. Five-colour
-      palette (Red / Yellow / Green / Blue / Black) and three-step width
-      picker (Thin / Med / Thick, shortcuts 1/2/3). ⌘S save, ⌘C copy,
-      ⌘Z undo, ⌘⇧Z redo, ⌘W close, Clear button.  *Still to add: Crop /
-      custom colour picker.*
+      shortcuts) **plus Blur (B) and Crop (C)** — Blur is pixelate-style
+      via nearest-neighbour downscale/upscale; Crop drags a yellow guide
+      and on mouseUp replaces the image, resizes the window and clears
+      annotations. Five-colour palette (Red / Yellow / Green / Blue /
+      Black) and three-step width picker (Thin / Med / Thick, shortcuts
+      1/2/3). ⌘S save, ⌘C copy, ⌘Z undo, ⌘⇧Z redo, ⌘W close, Clear button.
+      *Still to add: custom colour picker / hex input.*
 - [ ] Color palette + custom hex; stroke width picker (1–24 px).
       *(Single red colour for now.)*
 - [~] History stack — undo only; redo is the next obvious add.

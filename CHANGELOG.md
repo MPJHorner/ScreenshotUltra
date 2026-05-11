@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Crop tool
+- **Crop tool** (`C`) — drag a yellow guide rectangle, release to crop
+  the image to that region. The window resizes to the new aspect ratio,
+  annotations are cleared, and a `editor_crop` NDJSON event is emitted.
+  Crop is destructive (not undoable via ⌘Z) by design; ⌘Z still affects
+  annotations.
+
 ### Added — Blur tool
 - **Blur tool** (`B`) — pixelate-style privacy filter. Drag to define a
   rectangle; the tool reads the corresponding sub-rect from the source

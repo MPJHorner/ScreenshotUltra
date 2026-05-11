@@ -19,6 +19,7 @@ Preview.
 | Counter      | `N`      | Click drops a numbered circle (auto-increments)           |
 | Text         | `T`      | Click prompts for text, places it at the click point      |
 | Blur         | `B`      | Drag a rectangle; pixelates the underlying image inside   |
+| Crop         | `C`      | Drag a rectangle; replaces the image with that sub-region |
 
 ## Colours
 
@@ -58,9 +59,18 @@ On `⌘S` the editor:
 The result is a single flat PNG that matches the editor view 1:1, at the
 full original resolution — no quality loss from the bitmap re-encode.
 
+## Crop semantics
+
+- The Crop rectangle is drawn as a yellow guide while you drag.
+- On mouseUp, the image is replaced with the cropped sub-region, the
+  window resizes to match the new aspect ratio, and existing
+  annotations are cleared (their coordinates wouldn't line up with the
+  new bounds anyway).
+- Crop is *not* reversible via ⌘Z — undo affects annotations, not the
+  underlying image. Plan accordingly, or re-capture if you mis-crop.
+
 ## What's not in the editor yet
 
-- Crop tool
 - Custom colour picker / hex input
 - Layers panel / shape selection / move-existing
 - Magic-arrow snap-to-UI-element heuristic
