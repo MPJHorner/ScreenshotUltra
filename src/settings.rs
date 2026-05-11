@@ -61,6 +61,16 @@ pub struct Hotkeys {
 pub struct Sinks {
     pub clipboard: bool,
     pub disk: bool,
+    /// Optional shell command run after a successful capture. The captured
+    /// file path is passed as `$1`. Empty = disabled. Examples:
+    ///
+    ///   shell = "scp $1 user@host:/var/www/img/"
+    ///   shell = "rclone copy $1 remote:bucket/"
+    ///   shell = "/usr/local/bin/slack-upload $1"
+    ///
+    /// Runs detached so it doesn't block the capture pipeline.
+    #[serde(default)]
+    pub shell: String,
 }
 
 impl Default for General {
@@ -97,6 +107,7 @@ impl Default for Sinks {
         Self {
             clipboard: true,
             disk: true,
+            shell: String::new(),
         }
     }
 }

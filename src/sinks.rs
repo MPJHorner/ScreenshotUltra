@@ -1,8 +1,10 @@
-// Output sinks. M1 ships clipboard + disk. Disk is implicit (the capture is
-// written there directly); clipboard is handled here.
+// Output sinks. M1 shipped clipboard + disk (disk is implicit; the capture
+// writes there directly). M2 added a shell-command sink and a shutter sound
+// hook.
 
 use anyhow::{Context, Result};
 use std::path::Path;
+use std::process::Command;
 
 /// Copy a PNG/JPG file to the macOS clipboard as an image.
 ///
@@ -28,4 +30,65 @@ pub fn clipboard_copy_image(path: &Path) -> Result<()> {
         anyhow::bail!("osascript clipboard copy failed: {stderr}");
     }
     Ok(())
+}
+
+/// Run a shell command with the captured file path substituted for `$1`.
+/// The command is executed via `/bin/sh -c "<cmd>" -- <path>` so users can
+/// write idiomatic shell with quoting, pipes, env vars, etc. We do not
+/// wait for completion — the child is detached so a slow uploader can't
+/// block the capture pipeline. Returns Ok(()) once the child is spawned.
+///
+/// Empty / whitespace-only commands are treated as "no shell sink".
+pub fn shell_sink(cmd: &str, path: &Path) -> Result<bool> {
+    let cmd = cmd.trim();
+    if cmd.is_empty() {
+        return Ok(false);
+    }
+    let path_str = path.to_string_lossy().into_owned();
+    Command::new("/bin/sh")
+        .arg("-c")
+        .arg(cmd)
+        .arg("--")
+        .arg(&path_str)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .with_context(|| format!("spawning shell sink: {cmd}"))?;
+    Ok(true)
+}
+
+/// Play the macOS "Grab" shutter sound. Cheap and non-blocking.
+#[cfg(target_os = "macos")]
+pub fn play_shutter() {
+    let _ = Command::new("/usr/bin/afplay")
+        .arg("/System/Library/Sounds/Grab.aiff")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn play_shutter() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn empty_shell_command_is_a_no_op() {
+        let p = PathBuf::from("/tmp/whatever.png");
+        assert!(!shell_sink("", &p).unwrap());
+        assert!(!shell_sink("   \t\n  ", &p).unwrap());
+    }
+
+    #[test]
+    fn shell_sink_runs_simple_command() {
+        // Use `true` which always succeeds. spawn() returns immediately;
+        // we only care it didn't error.
+        let p = PathBuf::from("/tmp/whatever.png");
+        assert!(shell_sink("true", &p).unwrap());
+    }
 }

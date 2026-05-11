@@ -29,6 +29,10 @@ pub enum UserEvent {
 }
 
 fn main() -> Result<()> {
+    if handle_cli_args() {
+        return Ok(());
+    }
+
     let settings = Settings::load_or_default().context("loading settings")?;
     logging::init(&settings).context("initialising logging")?;
 
@@ -127,6 +131,66 @@ fn main() -> Result<()> {
             }
         }
     })
+}
+
+/// Handle one-shot CLI flags. Returns true when the program should exit
+/// without starting the event loop. Only the first argument is consulted;
+/// we don't have any flags that compose so there's no need for a real parser.
+fn handle_cli_args() -> bool {
+    let Some(arg) = std::env::args().nth(1) else {
+        return false;
+    };
+    match arg.as_str() {
+        "--version" | "-v" => {
+            println!("screenshot-ultra {}", env!("CARGO_PKG_VERSION"));
+            true
+        }
+        "--help" | "-h" => {
+            print_help();
+            true
+        }
+        "--settings-path" => {
+            match Settings::path() {
+                Ok(p) => println!("{}", p.display()),
+                Err(err) => eprintln!("error: {err:#}"),
+            }
+            true
+        }
+        "--print-defaults" => {
+            let s = Settings::default();
+            match toml::to_string_pretty(&s) {
+                Ok(raw) => println!("{raw}"),
+                Err(err) => eprintln!("error: {err:#}"),
+            }
+            true
+        }
+        _ => {
+            eprintln!("unknown argument: {arg}");
+            eprintln!("try --help");
+            std::process::exit(2);
+        }
+    }
+}
+
+fn print_help() {
+    println!(
+        "screenshot-ultra {} — snappy hotkey-first macOS screenshot & screen recorder
+
+USAGE:
+    screenshot-ultra [FLAGS]
+
+FLAGS:
+    -h, --help           Print this help message and exit
+    -v, --version        Print version and exit
+        --settings-path  Print the path to settings.toml and exit
+        --print-defaults Print the default settings.toml contents and exit
+
+Running without flags launches the menu-bar agent. Hotkeys are configured
+in settings.toml (see --settings-path).
+
+Docs: https://github.com/MPJHorner/ScreenshotUltra",
+        env!("CARGO_PKG_VERSION")
+    );
 }
 
 fn handle_action(action: hotkeys::Action, settings: &Settings) {

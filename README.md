@@ -96,6 +96,43 @@ clipboard              = true
 disk                   = true
 ```
 
+## Sinks
+
+Every successful capture fans out to one or more sinks. All are configurable
+in `settings.toml`:
+
+| Sink       | What it does                                                       |
+|------------|--------------------------------------------------------------------|
+| `disk`     | Writes the image to the templated path under `save_folder`         |
+| `clipboard`| Places the image on the macOS clipboard                            |
+| `shell`    | Runs `sh -c "<your command>" -- <path>` (path is `$1`); detached   |
+
+Shell-sink examples:
+
+```toml
+[sinks]
+shell = "scp $1 user@host:/var/www/img/"
+# or
+shell = "rclone copy $1 remote:bucket/"
+# or
+shell = "/usr/local/bin/slack-upload $1"
+```
+
+The shell-sink runs detached so even a slow uploader never blocks the
+capture pipeline. Output is suppressed; check stderr by running the
+command manually first.
+
+## CLI flags
+
+```sh
+screenshot-ultra --help              # print usage
+screenshot-ultra --version           # print version
+screenshot-ultra --settings-path     # print the absolute path to settings.toml
+screenshot-ultra --print-defaults    # print the default settings.toml to stdout
+```
+
+Run without flags to launch the menu-bar agent.
+
 ## Logging
 
 Every event is one JSON line in `~/Library/Logs/ScreenshotUltra/log.ndjson`:
@@ -105,6 +142,10 @@ Every event is one JSON line in `~/Library/Logs/ScreenshotUltra/log.ndjson`:
 ```
 
 Grep, pipe to `jq`, or just `tail -f` while debugging.
+
+The same payload (minus the `ts`) is also appended to
+`<save_folder>/.screenshot-ultra/index.ndjson` — a per-folder history
+index that travels with your screenshots.
 
 ## Roadmap
 

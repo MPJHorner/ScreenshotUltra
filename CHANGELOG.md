@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added — M2 (in progress)
+- **Shell sink** — `sinks.shell = "scp $1 user@host:/path/"` runs an
+  arbitrary shell command with the capture's file path as `$1`. Spawned
+  detached so a slow uploader can't stall capture.
+- **History NDJSON index** at `<save_folder>/.screenshot-ultra/index.ndjson`,
+  one JSON line per capture. Searchable with `jq`/`fzf`/`grep`.
+- **Shutter sound** plays `/System/Library/Sounds/Grab.aiff` when
+  `[general].play_shutter_sound = true` (the default).
+- **CLI flags**: `--version`, `--help`, `--settings-path`,
+  `--print-defaults`. Useful for shell pipelines and onboarding.
 - **Window capture mode** (default `⌃⌥⌘2`) — interactive window selection
   via `screencapture -W`, with the window's drop shadow trimmed off.
 - **Pin-to-screen** (default `⌃⌥⌘.`) — floating always-on-top window holding

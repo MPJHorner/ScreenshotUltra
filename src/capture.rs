@@ -116,8 +116,20 @@ pub fn run(mode: CaptureMode, show_tray: bool, settings: &Settings) -> Result<()
         }
     }
 
+    if !settings.sinks.shell.trim().is_empty() {
+        match sinks::shell_sink(&settings.sinks.shell, &path) {
+            Ok(true) => sinks_fired.push("shell"),
+            Ok(false) => {}
+            Err(err) => eprintln!("shell sink failed: {err:#}"),
+        }
+    }
+
+    if settings.general.play_shutter_sound {
+        sinks::play_shutter();
+    }
+
     let duration_ms = start.elapsed().as_millis() as u64;
-    logging::event(serde_json::json!({
+    let event = serde_json::json!({
         "evt": "capture",
         "mode": mode.as_str(),
         "bytes": bytes,
@@ -125,7 +137,9 @@ pub fn run(mode: CaptureMode, show_tray: bool, settings: &Settings) -> Result<()
         "saved_to": path.display().to_string(),
         "sinks": sinks_fired,
         "duration_ms": duration_ms,
-    }));
+    });
+    logging::event(event.clone());
+    write_history_index(&folder, &event);
 
     eprintln!(
         "captured {} ({} bytes, {} ms)",
@@ -147,6 +161,29 @@ pub fn run(mode: CaptureMode, show_tray: bool, settings: &Settings) -> Result<()
     }
 
     Ok(())
+}
+
+/// Append a JSON line describing this capture to `<folder>/.screenshot-ultra/index.ndjson`.
+/// Best-effort: errors are swallowed (we don't want to fail a successful capture
+/// just because the index file couldn't be written).
+fn write_history_index(folder: &std::path::Path, event: &serde_json::Value) {
+    use std::io::Write;
+    let dir = folder.join(".screenshot-ultra");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let path = dir.join("index.ndjson");
+    let line = match serde_json::to_string(event) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = writeln!(file, "{line}");
+    }
 }
 
 fn render_path(folder: &std::path::Path, mode: CaptureMode, template: &str, fmt: &str) -> PathBuf {
