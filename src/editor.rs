@@ -33,10 +33,83 @@ mod mac {
         NSData, NSDictionary, NSObject, NSPoint, NSRect, NSSize, NSString, NSURL,
     };
 
-    /// A single freehand stroke.
-    #[derive(Clone)]
-    struct Stroke {
-        points: Vec<NSPoint>,
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Tool {
+        Pen,
+        Arrow,
+        Rect,
+        Ellipse,
+    }
+
+    #[derive(Clone, Debug)]
+    enum Shape {
+        Pen { points: Vec<NSPoint> },
+        Arrow { from: NSPoint, to: NSPoint },
+        Rect { from: NSPoint, to: NSPoint },
+        Ellipse { from: NSPoint, to: NSPoint },
+    }
+
+    impl Shape {
+        fn from_tool(tool: Tool, start: NSPoint) -> Self {
+            match tool {
+                Tool::Pen => Shape::Pen {
+                    points: vec![start],
+                },
+                Tool::Arrow => Shape::Arrow {
+                    from: start,
+                    to: start,
+                },
+                Tool::Rect => Shape::Rect {
+                    from: start,
+                    to: start,
+                },
+                Tool::Ellipse => Shape::Ellipse {
+                    from: start,
+                    to: start,
+                },
+            }
+        }
+        fn update(&mut self, point: NSPoint) {
+            match self {
+                Shape::Pen { points } => points.push(point),
+                Shape::Arrow { to, .. } | Shape::Rect { to, .. } | Shape::Ellipse { to, .. } => {
+                    *to = point;
+                }
+            }
+        }
+        fn is_meaningful(&self) -> bool {
+            match self {
+                Shape::Pen { points } => points.len() >= 2,
+                Shape::Arrow { from, to }
+                | Shape::Rect { from, to }
+                | Shape::Ellipse { from, to } => {
+                    (from.x - to.x).abs() > 2.0 || (from.y - to.y).abs() > 2.0
+                }
+            }
+        }
+        fn scaled(&self, sx: f64, sy: f64) -> Self {
+            let s = |p: &NSPoint| NSPoint {
+                x: p.x * sx,
+                y: p.y * sy,
+            };
+            match self {
+                Shape::Pen { points } => Shape::Pen {
+                    points: points.iter().map(s).collect(),
+                },
+                Shape::Arrow { from, to } => Shape::Arrow {
+                    from: s(from),
+                    to: s(to),
+                },
+                Shape::Rect { from, to } => Shape::Rect {
+                    from: s(from),
+                    to: s(to),
+                },
+                Shape::Ellipse { from, to } => Shape::Ellipse {
+                    from: s(from),
+                    to: s(to),
+                },
+            }
+        }
     }
 
     struct EditorState {
@@ -44,10 +117,12 @@ mod mac {
         canvas: Retained<CanvasView>,
         _handler: Retained<Handler>,
         image: Retained<NSImage>,
-        image_pixel_size: NSSize, /* pixel size of the source image */
-        view_size: NSSize,        /* size of the canvas view */
-        strokes: Vec<Stroke>,
-        current: Option<Stroke>,
+        image_pixel_size: NSSize,
+        view_size: NSSize,
+        tool: Tool,
+        shapes: Vec<Shape>,
+        redo_stack: Vec<Shape>,
+        current: Option<Shape>,
         source_path: PathBuf,
     }
 
@@ -88,20 +163,19 @@ mod mac {
                 EDITOR.with(|slot| {
                     let Some(state) = slot.borrow().as_ref().map(|s| (
                         s.image.clone(),
-                        s.strokes.clone(),
+                        s.shapes.clone(),
                         s.current.clone(),
                         s.view_size,
                     )) else { return };
-                    let (image, strokes, current, view_size) = state;
+                    let (image, shapes, current, view_size) = state;
                     let bounds = NSRect {
                         origin: NSPoint { x: 0.0, y: 0.0 },
                         size: view_size,
                     };
                     unsafe {
-                        // Background — fill with the image, scaled to fit.
                         image.drawInRect(bounds);
                     }
-                    paint_strokes(&strokes, current.as_ref());
+                    paint_shapes(&shapes, current.as_ref(), 3.0);
                 });
             }
 
@@ -110,9 +184,8 @@ mod mac {
                 let location = unsafe { self.convertPoint_fromView(event.locationInWindow(), None) };
                 EDITOR.with(|slot| {
                     if let Some(state) = slot.borrow_mut().as_mut() {
-                        state.current = Some(Stroke {
-                            points: vec![location],
-                        });
+                        state.redo_stack.clear();
+                        state.current = Some(Shape::from_tool(state.tool, location));
                     }
                 });
                 unsafe { self.setNeedsDisplay(true) };
@@ -124,7 +197,7 @@ mod mac {
                 EDITOR.with(|slot| {
                     if let Some(state) = slot.borrow_mut().as_mut() {
                         if let Some(s) = state.current.as_mut() {
-                            s.points.push(location);
+                            s.update(location);
                         }
                     }
                 });
@@ -136,8 +209,8 @@ mod mac {
                 EDITOR.with(|slot| {
                     if let Some(state) = slot.borrow_mut().as_mut() {
                         if let Some(s) = state.current.take() {
-                            if s.points.len() >= 2 {
-                                state.strokes.push(s);
+                            if s.is_meaningful() {
+                                state.shapes.push(s);
                             }
                         }
                     }
@@ -149,15 +222,25 @@ mod mac {
             fn key_down(&self, event: &NSEvent) {
                 let mods = unsafe { event.modifierFlags() };
                 let cmd = mods.contains(objc2_app_kit::NSEventModifierFlags::Command);
+                let shift = mods.contains(objc2_app_kit::NSEventModifierFlags::Shift);
                 let chars = unsafe { event.charactersIgnoringModifiers() };
                 let s = chars.map(|c| c.to_string()).unwrap_or_default();
+                // Tool shortcuts (no Cmd): P/A/R/E
                 if !cmd {
+                    match s.as_str() {
+                        "p" | "P" => set_tool(Tool::Pen),
+                        "a" | "A" => set_tool(Tool::Arrow),
+                        "r" | "R" => set_tool(Tool::Rect),
+                        "e" | "E" => set_tool(Tool::Ellipse),
+                        _ => {}
+                    }
                     return;
                 }
                 match s.as_str() {
                     "s" => save_to_disk(),
                     "c" => copy_to_clipboard(),
-                    "z" => undo_last_stroke(),
+                    "z" if shift => redo_last(),
+                    "z" => undo_last(),
                     "w" => close_editor(),
                     _ => {}
                 }
@@ -178,38 +261,106 @@ mod mac {
             fn button_clicked(&self, sender: *mut AnyObject) {
                 let tag: isize = unsafe { msg_send![sender, tag] };
                 match tag {
+                    // Tool picker
+                    10 => set_tool(Tool::Pen),
+                    11 => set_tool(Tool::Arrow),
+                    12 => set_tool(Tool::Rect),
+                    13 => set_tool(Tool::Ellipse),
+                    // Actions
                     1 => save_to_disk(),
                     2 => copy_to_clipboard(),
-                    3 => undo_last_stroke(),
-                    4 => clear_strokes(),
-                    5 => close_editor(),
+                    3 => undo_last(),
+                    4 => redo_last(),
+                    5 => clear_shapes(),
+                    6 => close_editor(),
                     _ => {}
                 }
             }
         }
     );
 
-    // ---- Stroke painting (called from drawRect:) ------------------------
+    // ---- Shape painting (called from drawRect:) ------------------------
 
-    fn paint_strokes(strokes: &[Stroke], current: Option<&Stroke>) {
+    fn paint_shapes(shapes: &[Shape], current: Option<&Shape>, width: f64) {
         unsafe {
             let red = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.24, 0.33, 1.0);
             red.setStroke();
-            for s in strokes.iter().chain(current) {
-                if s.points.len() < 2 {
-                    continue;
-                }
-                let path = NSBezierPath::bezierPath();
-                path.setLineWidth(3.0);
-                path.setLineCapStyle(objc2_app_kit::NSLineCapStyle::Round);
-                path.setLineJoinStyle(objc2_app_kit::NSLineJoinStyle::Round);
-                path.moveToPoint(s.points[0]);
-                for p in &s.points[1..] {
-                    path.lineToPoint(*p);
-                }
-                path.stroke();
+            for shape in shapes.iter().chain(current) {
+                paint_one(shape, width);
             }
         }
+    }
+
+    unsafe fn paint_one(shape: &Shape, width: f64) {
+        let path = NSBezierPath::bezierPath();
+        path.setLineWidth(width);
+        path.setLineCapStyle(objc2_app_kit::NSLineCapStyle::Round);
+        path.setLineJoinStyle(objc2_app_kit::NSLineJoinStyle::Round);
+        match shape {
+            Shape::Pen { points } => {
+                if points.len() < 2 {
+                    return;
+                }
+                path.moveToPoint(points[0]);
+                for p in &points[1..] {
+                    path.lineToPoint(*p);
+                }
+            }
+            Shape::Arrow { from, to } => {
+                path.moveToPoint(*from);
+                path.lineToPoint(*to);
+                // Arrowhead: two short lines at the tip.
+                let dx = to.x - from.x;
+                let dy = to.y - from.y;
+                let len = (dx * dx + dy * dy).sqrt().max(0.0001);
+                let ux = dx / len;
+                let uy = dy / len;
+                let head_len = (width * 5.0).max(12.0);
+                let head_angle = 0.5_f64; /* ~28.6 degrees */
+                let cos_a = head_angle.cos();
+                let sin_a = head_angle.sin();
+                // Two perpendicular rotated unit vectors pointing back from `to`.
+                let left = NSPoint {
+                    x: to.x - head_len * (ux * cos_a + uy * sin_a),
+                    y: to.y - head_len * (uy * cos_a - ux * sin_a),
+                };
+                let right = NSPoint {
+                    x: to.x - head_len * (ux * cos_a - uy * sin_a),
+                    y: to.y - head_len * (uy * cos_a + ux * sin_a),
+                };
+                path.moveToPoint(*to);
+                path.lineToPoint(left);
+                path.moveToPoint(*to);
+                path.lineToPoint(right);
+            }
+            Shape::Rect { from, to } => {
+                let r = NSRect {
+                    origin: NSPoint {
+                        x: from.x.min(to.x),
+                        y: from.y.min(to.y),
+                    },
+                    size: NSSize {
+                        width: (to.x - from.x).abs(),
+                        height: (to.y - from.y).abs(),
+                    },
+                };
+                path.appendBezierPathWithRect(r);
+            }
+            Shape::Ellipse { from, to } => {
+                let r = NSRect {
+                    origin: NSPoint {
+                        x: from.x.min(to.x),
+                        y: from.y.min(to.y),
+                    },
+                    size: NSSize {
+                        width: (to.x - from.x).abs(),
+                        height: (to.y - from.y).abs(),
+                    },
+                };
+                path.appendBezierPathWithOvalInRect(r);
+            }
+        }
+        path.stroke();
     }
 
     // ---- Actions --------------------------------------------------------
@@ -222,23 +373,45 @@ mod mac {
         });
     }
 
-    fn undo_last_stroke() {
+    fn undo_last() {
         EDITOR.with(|slot| {
             if let Some(state) = slot.borrow_mut().as_mut() {
-                state.strokes.pop();
+                if let Some(shape) = state.shapes.pop() {
+                    state.redo_stack.push(shape);
+                }
             }
         });
         redraw();
     }
 
-    fn clear_strokes() {
+    fn redo_last() {
         EDITOR.with(|slot| {
             if let Some(state) = slot.borrow_mut().as_mut() {
-                state.strokes.clear();
+                if let Some(shape) = state.redo_stack.pop() {
+                    state.shapes.push(shape);
+                }
+            }
+        });
+        redraw();
+    }
+
+    fn clear_shapes() {
+        EDITOR.with(|slot| {
+            if let Some(state) = slot.borrow_mut().as_mut() {
+                state.shapes.clear();
+                state.redo_stack.clear();
                 state.current = None;
             }
         });
         redraw();
+    }
+
+    fn set_tool(tool: Tool) {
+        EDITOR.with(|slot| {
+            if let Some(state) = slot.borrow_mut().as_mut() {
+                state.tool = tool;
+            }
+        });
     }
 
     fn close_editor() {
@@ -305,7 +478,7 @@ mod mac {
             let state = state_ref.as_ref()?;
             let pixel_size = state.image_pixel_size;
             let view_size = state.view_size;
-            let strokes = state.strokes.clone();
+            let shapes = state.shapes.clone();
             let current = state.current.clone();
             let image = state.image.clone();
             drop(state_ref);
@@ -339,26 +512,17 @@ mod mac {
                 };
                 image.drawInRect(dest);
 
-                // Map view coords → pixel coords and paint strokes.
+                // Map view coords → pixel coords and paint shapes.
                 let sx = pixel_size.width / view_size.width.max(1.0);
                 let sy = pixel_size.height / view_size.height.max(1.0);
-                let scaled: Vec<Stroke> = strokes
+                let scaled: Vec<Shape> = shapes
                     .iter()
                     .chain(current.as_ref())
-                    .map(|s| Stroke {
-                        points: s
-                            .points
-                            .iter()
-                            .map(|p| NSPoint {
-                                x: p.x * sx,
-                                y: p.y * sy,
-                            })
-                            .collect(),
-                    })
+                    .map(|s| s.scaled(sx, sy))
                     .collect();
-                // Scale the line width too so it looks the same on the
-                // saved image as it did in the editor.
-                paint_strokes_with_width(&scaled, sx.max(sy) * 3.0);
+                // Scale the line width too so the saved image matches what
+                // the user saw in the editor.
+                paint_shapes(&scaled, None, sx.max(sy) * 3.0);
 
                 NSGraphicsContext::restoreGraphicsState_class();
                 let _ = mtm; // suppress unused-binding warning under cfg variations
@@ -373,27 +537,6 @@ mod mac {
         })
     }
 
-    fn paint_strokes_with_width(strokes: &[Stroke], width: f64) {
-        unsafe {
-            let red = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.24, 0.33, 1.0);
-            red.setStroke();
-            for s in strokes {
-                if s.points.len() < 2 {
-                    continue;
-                }
-                let path = NSBezierPath::bezierPath();
-                path.setLineWidth(width);
-                path.setLineCapStyle(objc2_app_kit::NSLineCapStyle::Round);
-                path.setLineJoinStyle(objc2_app_kit::NSLineJoinStyle::Round);
-                path.moveToPoint(s.points[0]);
-                for p in &s.points[1..] {
-                    path.lineToPoint(*p);
-                }
-                path.stroke();
-            }
-        }
-    }
-
     fn ns_data_to_vec(data: &NSData) -> Vec<u8> {
         // objc2-foundation's NSData provides to_vec() on stable. Use it.
         data.to_vec()
@@ -401,7 +544,8 @@ mod mac {
 
     // ---- Window construction --------------------------------------------
 
-    const TOOLBAR_H: f64 = 36.0;
+    const TOOLBAR_H: f64 = 40.0;
+    const TOOLPICKER_H: f64 = 32.0;
 
     fn build(mtm: MainThreadMarker, image_path: &Path) -> Result<EditorState, String> {
         let app = NSApplication::sharedApplication(mtm);
@@ -422,19 +566,20 @@ mod mac {
                     height: 800.0,
                 })
         };
+        let chrome_h = TOOLBAR_H + TOOLPICKER_H;
         let max_w = screen_size.width * 0.8;
-        let max_h = (screen_size.height * 0.8) - TOOLBAR_H;
+        let max_h = (screen_size.height * 0.8) - chrome_h;
         let scale = (max_w / pixel_size.width)
             .min(max_h / pixel_size.height)
             .min(1.0);
-        let view_w = (pixel_size.width * scale).max(320.0);
+        let view_w = (pixel_size.width * scale).max(420.0);
         let view_h = (pixel_size.height * scale).max(200.0);
 
         let win_rect = NSRect {
             origin: NSPoint { x: 120.0, y: 120.0 },
             size: NSSize {
                 width: view_w,
-                height: view_h + TOOLBAR_H,
+                height: view_h + chrome_h,
             },
         };
 
@@ -464,7 +609,8 @@ mod mac {
             window.setTitle(&title);
         }
 
-        // Canvas
+        // Canvas sits above the bottom action bar and below the top tool
+        // picker.
         let canvas_rect = NSRect {
             origin: NSPoint {
                 x: 0.0,
@@ -486,40 +632,82 @@ mod mac {
             );
         }
 
-        // Toolbar buttons
         let handler: Retained<Handler> = unsafe { msg_send![Handler::alloc(), init] };
-        let labels = ["Save (⌘S)", "Copy (⌘C)", "Undo (⌘Z)", "Clear", "Done (⌘W)"];
-        let tags: [isize; 5] = [1, 2, 3, 4, 5];
-        let btn_w = 110.0;
-        let btn_h = 24.0;
-        let gap = 4.0;
-        let total = (btn_w * labels.len() as f64) + (gap * (labels.len() as f64 - 1.0));
-        let start_x = (view_w - total) / 2.0;
-        let y = (TOOLBAR_H - btn_h) / 2.0;
+
+        let make_button = |label: &str, tag: isize, x: f64, y: f64, w: f64, h: f64| {
+            let title = NSString::from_str(label);
+            unsafe {
+                let rect = NSRect {
+                    origin: NSPoint { x, y },
+                    size: NSSize {
+                        width: w,
+                        height: h,
+                    },
+                };
+                let b: Retained<NSButton> = NSButton::initWithFrame(NSButton::alloc(mtm), rect);
+                b.setTitle(&title);
+                b.setBezelStyle(NSBezelStyle::Push);
+                b.setTag(tag);
+                b.setTarget(Some(handler.as_ref()));
+                b.setAction(Some(sel!(buttonClicked:)));
+                b
+            }
+        };
 
         if let Some(content_view) = window.contentView() {
             unsafe { content_view.addSubview(&canvas) };
-            for (i, label) in labels.iter().enumerate() {
-                let rect = NSRect {
-                    origin: NSPoint {
-                        x: start_x + (btn_w + gap) * i as f64,
-                        y,
-                    },
-                    size: NSSize {
-                        width: btn_w,
-                        height: btn_h,
-                    },
-                };
-                let title = NSString::from_str(label);
-                let btn: Retained<NSButton> = unsafe {
-                    let b = NSButton::initWithFrame(NSButton::alloc(mtm), rect);
-                    b.setTitle(&title);
-                    b.setBezelStyle(NSBezelStyle::Push);
-                    b.setTag(tags[i]);
-                    b.setTarget(Some(handler.as_ref()));
-                    b.setAction(Some(sel!(buttonClicked:)));
-                    b
-                };
+
+            // Top tool-picker row (above the canvas).
+            let tools = [
+                ("Pen (P)", 10),
+                ("Arrow (A)", 11),
+                ("Rect (R)", 12),
+                ("Ellipse (E)", 13),
+            ];
+            let tool_btn_w = 88.0;
+            let tool_btn_h = 24.0;
+            let tool_gap = 4.0;
+            let tool_total =
+                (tool_btn_w * tools.len() as f64) + (tool_gap * (tools.len() as f64 - 1.0));
+            let tool_start_x = (view_w - tool_total) / 2.0;
+            let tool_y = TOOLBAR_H + view_h + (TOOLPICKER_H - tool_btn_h) / 2.0;
+            for (i, (label, tag)) in tools.iter().enumerate() {
+                let btn = make_button(
+                    label,
+                    *tag,
+                    tool_start_x + (tool_btn_w + tool_gap) * i as f64,
+                    tool_y,
+                    tool_btn_w,
+                    tool_btn_h,
+                );
+                unsafe { content_view.addSubview(&btn) };
+            }
+
+            // Bottom action row.
+            let actions = [
+                ("Save ⌘S", 1),
+                ("Copy ⌘C", 2),
+                ("Undo ⌘Z", 3),
+                ("Redo ⌘⇧Z", 4),
+                ("Clear", 5),
+                ("Done ⌘W", 6),
+            ];
+            let act_btn_w = 88.0;
+            let act_btn_h = 24.0;
+            let act_gap = 4.0;
+            let act_total =
+                (act_btn_w * actions.len() as f64) + (act_gap * (actions.len() as f64 - 1.0));
+            let act_start_x = (view_w - act_total) / 2.0;
+            let act_y = (TOOLBAR_H - act_btn_h) / 2.0;
+            for (i, (label, tag)) in actions.iter().enumerate() {
+                let btn = make_button(
+                    label,
+                    *tag,
+                    act_start_x + (act_btn_w + act_gap) * i as f64,
+                    act_y,
+                    act_btn_w,
+                    act_btn_h,
+                );
                 unsafe { content_view.addSubview(&btn) };
             }
         }
@@ -540,7 +728,9 @@ mod mac {
                 width: view_w,
                 height: view_h,
             },
-            strokes: Vec::new(),
+            tool: Tool::Pen,
+            shapes: Vec::new(),
+            redo_stack: Vec::new(),
             current: None,
             source_path: image_path.to_path_buf(),
         })

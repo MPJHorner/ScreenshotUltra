@@ -5,14 +5,17 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] — 2026-05-11
 
-### Added — M2 (in progress)
-- **Native annotation editor** — opens captured images in a real
-  `NSWindow` with a custom `CanvasView` that paints the image + freehand
-  red strokes. Shortcuts: ⌘S save (overwrites the original), ⌘C copy
-  annotated PNG to clipboard, ⌘Z undo last stroke, ⌘W close. Toolbar
-  mirrors the shortcuts plus a "Clear" button.
+### Added — M2 (annotation editor + polish)
+- **Native annotation editor**, now with **multiple tools**: Pen / Arrow /
+  Rectangle / Ellipse. Tool-picker buttons sit above the canvas;
+  shortcuts `P` / `A` / `R` / `E` switch tools. ⌘S save (overwrites the
+  original), ⌘C copy annotated PNG, ⌘Z undo, **⌘⇧Z redo**, ⌘W close.
+  Bottom toolbar mirrors actions plus a Clear button.
+- Arrow tool draws a calculated arrowhead at the tip; Rect/Ellipse use
+  drag-to-define-bounds; Pen is freehand. All four scale correctly when
+  saved back into the original image's pixel dimensions.
 - The Quick Tray's **Edit** button now opens the native editor (was
   bouncing through Apple Preview).
 - **Timed fullscreen captures** — Tray menu offers `Fullscreen in 3 / 5 / 10 s`.

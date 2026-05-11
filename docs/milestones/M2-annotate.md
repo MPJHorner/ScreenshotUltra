@@ -8,12 +8,12 @@ capture mode.
 
 ## Scope (from plan.md §13)
 
-- [~] Editor window — MVP shipped: native `NSWindow` + custom `CanvasView`
-      via `objc2`. Single tool (freehand pen, red, 3 px), ⌘S save, ⌘C
-      copy, ⌘Z undo, ⌘W close, Clear button.  *Remaining tools (arrow,
-      rect, ellipse, line, highlighter, text, counter, blur, redact, crop)
-      land in follow-up commits — the canvas + render-back-to-PNG
-      pipeline is in place.*
+- [~] Editor window — native `NSWindow` + custom `CanvasView` via `objc2`.
+      **Tools shipped: Pen / Arrow / Rect / Ellipse** with picker buttons
+      and `P` / `A` / `R` / `E` shortcuts. ⌘S save, ⌘C copy, ⌘Z undo,
+      ⌘⇧Z redo, ⌘W close, Clear button. Red, 3 px stroke. *Still to add:
+      Line / Highlighter / Text / Counter / Blur / Redact / Crop / color
+      palette / stroke-width picker.*
 - [ ] Color palette + custom hex; stroke width picker (1–24 px).
       *(Single red colour for now.)*
 - [~] History stack — undo only; redo is the next obvious add.
