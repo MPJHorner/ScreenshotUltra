@@ -5,7 +5,36 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] — 2026-05-11
+
+The "annotate everything, then some" release. The annotation editor now
+ships with **eleven tools** (Pen / Line / Arrow / Rect / Ellipse /
+Highlighter / Redact / Counter / Text / Blur / Crop), visual indicators
+for the active tool / colour / width, and a real app icon. README and
+docs site restyled to match the **Ultra** family.
+
+### Added — app icon
+- Hand-tuned SVG aperture icon (`icon/icon.svg`) generated to match
+  the macOS squircle + sheen treatment of the sister projects, with
+  the brand camera-shutter red (`#FF3D54`) gradient and a six-bladed
+  iris around a glossy lens.
+- `scripts/render-icon.sh` builds the full `.icns` from the SVG using
+  Swift's `NSImage` + `iconutil`. Pure macOS tooling — no `brew install`
+  required. Hooked into `make app` as a dependency of the bundle.
+- `Info.plist` declares `CFBundleIconFile = AppIcon` so the app shows
+  the icon in `/Applications`, Spotlight, the App Switcher, and the
+  Quick Tray's Reveal-in-Finder result.
+
+### Changed — Ultra-family styling
+- README rewritten to match the **MailBox Ultra** / **Postbin Ultra**
+  layout: badges row, blockquote of doc links, **Why**, install one-liner
+  in a 🚀 blockquote, Quick start, What it does, Hotkeys + Editor
+  shortcut tables, Configuration, Sinks & shell, Development, Documentation,
+  Sister projects, Contributing, License.
+- Docs site `index.md` follows the same three-promises structure as the
+  sister sites.
+- mkdocs accent colour set to `pink` (closest Material accent to the
+  brand `#FF3D54`).
 
 ### Added — active-selection indicators
 - Tool, colour, and stroke-width buttons now visually reflect the

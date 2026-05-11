@@ -2,6 +2,9 @@
 **/*.rs.bk
 Cargo.lock.bak
 .DS_Store
+
+# Generated artefacts — re-rendered by scripts/render-icon.sh from icon.svg.
+/icon/AppIcon.iconset
 *.swp
 *.swo
 

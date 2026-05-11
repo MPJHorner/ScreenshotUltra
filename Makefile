@@ -35,13 +35,19 @@ check: fmt clippy test
 build:
 	$(CARGO) build --release
 
-app: build
+app: build icon/AppIcon.icns
 	@rm -rf "$(APP_DIR)"
 	@mkdir -p "$(APP_DIR)/Contents/MacOS" "$(APP_DIR)/Contents/Resources"
 	@cp "$(RELEASE_DIR)/$(BIN_NAME)" "$(APP_DIR)/Contents/MacOS/$(BIN_NAME)"
 	@cp mac/Info.plist "$(APP_DIR)/Contents/Info.plist"
+	@cp icon/AppIcon.icns "$(APP_DIR)/Contents/Resources/AppIcon.icns"
 	@echo "APPL????" > "$(APP_DIR)/Contents/PkgInfo"
 	@echo "Built $(APP_DIR)"
+
+# Render icon/icon.svg into a full AppIcon.icns via Swift's NSImage + iconutil.
+# Regenerate by deleting AppIcon.icns and re-running `make app`.
+icon/AppIcon.icns: icon/icon.svg scripts/render-icon.sh
+	@bash scripts/render-icon.sh
 
 clean:
 	$(CARGO) clean

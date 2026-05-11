@@ -1,81 +1,87 @@
 # Screenshot Ultra
 
-> **Capture every pixel. Annotate like a native.**
-> A snappy, hotkey-first macOS screenshot and screen recorder.
-> Local-first. No cloud. No telemetry. No account.
+A snappy, hotkey-first macOS screenshot and screen recorder. Press a key, capture anything on screen — region, window, fullscreen, or clipboard image — annotate it inline with eleven tools, and it's on your clipboard before the shutter sound finishes. Built in Rust + native AppKit, runs entirely on your machine, no telemetry, no cloud account, no auto-upload.
 
-Sister project to **MailBox Ultra** and **Postbin Ultra** — same stack, same posture, same one-liner install.
+[![CI](https://github.com/MPJHorner/ScreenshotUltra/actions/workflows/ci.yml/badge.svg)](https://github.com/MPJHorner/ScreenshotUltra/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/MPJHorner/ScreenshotUltra?display_name=tag&sort=semver)](https://github.com/MPJHorner/ScreenshotUltra/releases/latest)
+[![Docs](https://img.shields.io/badge/docs-mpjhorner.github.io-FF3D54)](https://mpjhorner.github.io/ScreenshotUltra/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey.svg)](https://github.com/MPJHorner/ScreenshotUltra/releases/latest)
 
-## Status
+> **Full documentation: [mpjhorner.github.io/ScreenshotUltra](https://mpjhorner.github.io/ScreenshotUltra/)** · [Install](https://mpjhorner.github.io/ScreenshotUltra/install/) · [Quick start](https://mpjhorner.github.io/ScreenshotUltra/quick-start/) · [Hotkeys](https://mpjhorner.github.io/ScreenshotUltra/hotkeys/) · [Editor](https://mpjhorner.github.io/ScreenshotUltra/editor/) · [Changelog](https://mpjhorner.github.io/ScreenshotUltra/changelog/)
 
-This repository is under active development. The current shipped milestone is
-**M1 — "Press the key"**:
+## Why
 
-- Menu-bar agent (no dock icon) with a small status-bar menu.
-- Global hotkeys (rebindable in `settings.toml`).
-- Region and fullscreen capture via the macOS `screencapture` backend.
-- Disk sink (`~/Pictures/ScreenshotUltra/` by default) with templated filenames.
-- Clipboard sink (image lands on your clipboard on every capture).
-- NDJSON event log at `~/Library/Logs/ScreenshotUltra/log.ndjson`.
-
-**M2 progress:** Quick Tray, silent-vs-standard split, window capture mode,
-Pin-to-screen, Repeat-last, and a polished tray menu have all landed.
-Annotation editor and Preferences UI are the remaining M2 pieces.
-
-Future milestones (M2–M6) are tracked in [`docs/milestones/`](docs/milestones/)
-and the full design lives in [`plan.md`](plan.md).
+macOS's built-in screenshot tool is great until you need to annotate, pin, repeat, or pipe the result somewhere. CleanShot X and friends solve that — for a yearly subscription and a cloud account you didn't ask for. Screenshot Ultra is the local Mac alternative: every capture lives on your disk in a folder you choose, the annotation editor is a real `NSWindow` (not a Chromium tab), and the optional "share to anywhere" sink is a shell command you write, so you keep total control over where pixels go.
 
 ## Install
 
-Once `.dmg` releases are published the one-liner will be:
+> ### 🚀 macOS — one line
+>
+> ```sh
+> curl -sSL https://raw.githubusercontent.com/MPJHorner/ScreenshotUltra/main/scripts/install.sh | bash
+> ```
+>
+> Detects your arch, grabs the universal `.zip` from the [latest release](https://github.com/MPJHorner/ScreenshotUltra/releases/latest), verifies the SHA-256, drops `Screenshot Ultra.app` into `/Applications`, and clears the Gatekeeper quarantine flag. That's it — open it from Spotlight or `open "/Applications/Screenshot Ultra.app"` and grant Screen Recording permission on first launch.
 
-```sh
-curl -sSL https://raw.githubusercontent.com/MPJHorner/ScreenshotUltra/main/scripts/install.sh | bash
+Prefer the manual route? Download the `.zip` from the [latest release](https://github.com/MPJHorner/ScreenshotUltra/releases/latest), unzip it into `/Applications`, then `xattr -dr com.apple.quarantine "/Applications/Screenshot Ultra.app"`. Build-from-source instructions are on the [install page](https://mpjhorner.github.io/ScreenshotUltra/install/).
+
+## Quick start
+
+Launch the app — a small camera icon appears in your menu bar, no dock icon. Then:
+
+```
+⌃⌥⌘1   →  drag a rectangle              → image on clipboard, saved to disk, Quick Tray bottom-right
+⌃⌥⌘2   →  hover-highlight, click window → same flow, pixel-tight crop
+⌃⌥⌘3   →  capture the main display       → same flow
+⌃⌥⌘E   →  paste a clipboard image        → run it through the same flow
+⌃⌥⌘R   →  repeat the last capture        → same mode, same destinations
+⌃⌥⌘.   →  pin the last capture           → floating, always-on-top window
 ```
 
-For now, build from source (Rust stable, macOS 13+):
+Every binding is rebindable in `~/Library/Application Support/ScreenshotUltra/settings.toml` and changes take effect within a second — no app restart.
 
-```sh
-git clone https://github.com/MPJHorner/ScreenshotUltra.git
-cd ScreenshotUltra
-make app                     # builds dist/Screenshot Ultra.app
-open "dist/Screenshot Ultra.app"
-```
+## What it does
 
-On first launch macOS will prompt for **Screen Recording** permission.
-Grant it in System Settings → Privacy & Security → Screen & System Audio
-Recording, then launch the app again.
+- **Captures** — region, window, fullscreen (main display or all displays), timed (3 / 5 / 10 s countdown via `⌃⌥⌘1`+the tray menu), clipboard image → editor.
+- **Quick Tray** — a native floating `NSWindow` that pops up bottom-right after every capture: thumbnail + **Copy / Edit / Folder / Reveal / Pin / Discard** buttons. Auto-dismisses after 6 s. Has a silent counterpart for the snappiest possible flow.
+- **Native annotation editor** — eleven tools (Pen / Line / Arrow / Rect / Ellipse / Highlighter / Redact / Counter / Text / Blur / Crop), five-colour palette, three-step stroke-width picker, full undo/redo. `⌘S` saves the annotated PNG over the original, `⌘C` copies it to the clipboard.
+- **Pin-to-screen** — always-on-top floating window holding the latest capture. Cascade multiple pins; close with `⌘W`.
+- **Sinks** — clipboard, disk, and an arbitrary shell command (`scp` / `rclone` / `slack-upload` / whatever) with the path as `$1`. Runs detached so slow uploaders never stall capture.
+- **Logging** — one JSON line per event in `~/Library/Logs/ScreenshotUltra/log.ndjson`, plus a per-folder history index at `<save_folder>/.screenshot-ultra/index.ndjson`. Grep, `jq`, `tail -f` — your call.
+- **No network code links into the binary by default**. Open Little Snitch; it'll never light up.
 
-## Default hotkeys
+## Hotkeys
 
-| Action                          | Default   | Notes                                      |
-|---------------------------------|-----------|--------------------------------------------|
-| Region capture (Quick Tray)     | `⌃⌥⌘1`    | Standard flow: shows the floating tray     |
-| Window capture (Quick Tray)     | `⌃⌥⌘2`    | Interactive window selection               |
-| Fullscreen capture (Quick Tray) | `⌃⌥⌘3`    | Standard flow: shows the floating tray     |
-| Open clipboard image            | `⌃⌥⌘E`    | Pastes a clipboard image into the same flow |
-| Repeat last capture             | `⌃⌥⌘R`    | Re-runs the previous mode                  |
-| Pin last capture to screen      | `⌃⌥⌘.`    | Floating always-on-top window              |
-| Region / Window / Fullscreen (silent) | _unset_ | Set `silent_*` in settings to enable |
+| Action                       | Default | Notes                                       |
+|------------------------------|---------|---------------------------------------------|
+| Region capture               | `⌃⌥⌘1`  | Drag to define; `Esc` cancels               |
+| Window capture               | `⌃⌥⌘2`  | Hover-highlight; click to capture           |
+| Fullscreen capture           | `⌃⌥⌘3`  | Main display, all displays, or per-display  |
+| Open clipboard image         | `⌃⌥⌘E`  | Pastes a clipboard image into the same flow |
+| Repeat last                  | `⌃⌥⌘R`  | Re-runs the previous mode                   |
+| Pin last to screen           | `⌃⌥⌘.`  | Floating always-on-top window               |
+| Silent variants              | _unset_ | Set `silent_*` in `settings.toml` to enable |
 
-After every "standard" capture, the **Quick Tray** appears bottom-right with
-**Copy / Folder / Reveal / Pin / Discard** buttons. It auto-dismisses after 6 s
-(`quick_tray_timeout_ms`). The silent variants skip the tray and just save +
-copy to clipboard — useful when you want zero-latency capture for piping
-into other tools.
+All bindings live under `[hotkeys]` in `settings.toml`. Full syntax reference on the [hotkeys docs page](https://mpjhorner.github.io/ScreenshotUltra/hotkeys/).
 
-All hotkeys are rebindable in
-`~/Library/Application Support/ScreenshotUltra/settings.toml`. Edits take
-effect within ~1 s — no app restart needed. Invalid bindings keep the
-previous setting (with a log line) so you can't lock yourself out.
+## Editor shortcuts
 
-The full roadmap of hotkeys (window, scrolling, video, GIF, etc.) is in
-[`plan.md` §3](plan.md#3-hotkeys--the-centerpiece).
+| Key | Tool        |  Key | Tool        |  Key | Action       |
+|-----|-------------|------|-------------|------|--------------|
+| `P` | Pen         | `H`  | Highlighter | `⌘S` | Save         |
+| `L` | Line        | `X`  | Redact      | `⌘C` | Copy         |
+| `A` | Arrow       | `N`  | Counter     | `⌘Z` | Undo         |
+| `R` | Rectangle   | `T`  | Text        | `⌘⇧Z`| Redo         |
+| `E` | Ellipse     | `B`  | Blur        | `⌘W` | Close editor |
+| `C` | Crop        | `1`–`3`| Stroke width                |  |  |
 
-## Settings
+The full editor reference — every tool, every shortcut, how saving renders into the original resolution — lives at [mpjhorner.github.io/ScreenshotUltra/editor/](https://mpjhorner.github.io/ScreenshotUltra/editor/).
 
-`~/Library/Application Support/ScreenshotUltra/settings.toml` is auto-created on
-first run with sensible defaults. Edit it freely and restart the app.
+## Configuration
+
+`~/Library/Application Support/ScreenshotUltra/settings.toml` is auto-created on first run. Edits are picked up within ~1 second (no restart). Invalid hotkeys keep the previous binding so you can't lock yourself out.
 
 ```toml
 [general]
@@ -83,84 +89,94 @@ save_folder            = "~/Pictures/ScreenshotUltra"
 filename_template      = "{date}_{time}_{mode}_{seq}"
 default_image_format   = "png"
 copy_on_capture        = true
+play_shutter_sound     = true
+quick_tray_timeout_ms  = 6000
+
+[capture]
+include_cursor         = false
+fullscreen_scope       = "main"           # main | all
 
 [hotkeys]
-region                 = "ctrl+alt+cmd+1"      # standard flow (Quick Tray)
-window                 = "ctrl+alt+cmd+2"      # standard flow (Quick Tray)
-fullscreen             = "ctrl+alt+cmd+3"      # standard flow (Quick Tray)
-silent_region          = ""                    # set e.g. "ctrl+alt+cmd+4" to enable
-silent_window          = ""
-silent_fullscreen      = ""
+region                 = "ctrl+alt+cmd+1"
+window                 = "ctrl+alt+cmd+2"
+fullscreen             = "ctrl+alt+cmd+3"
+open_clipboard_image   = "ctrl+alt+cmd+e"
 pin_last               = "ctrl+alt+cmd+period"
 repeat_last            = "ctrl+alt+cmd+r"
 
 [sinks]
 clipboard              = true
 disk                   = true
+shell                  = ""               # e.g. "scp $1 user@host:/var/www/img/"
 ```
 
-## Sinks
+Print the resolved path with `screenshot-ultra --settings-path`. Regenerate the defaults with `screenshot-ultra --print-defaults > settings.toml`.
 
-Every successful capture fans out to one or more sinks. All are configurable
-in `settings.toml`:
-
-| Sink       | What it does                                                       |
-|------------|--------------------------------------------------------------------|
-| `disk`     | Writes the image to the templated path under `save_folder`         |
-| `clipboard`| Places the image on the macOS clipboard                            |
-| `shell`    | Runs `sh -c "<your command>" -- <path>` (path is `$1`); detached   |
-
-Shell-sink examples:
+## Sinks & shell
 
 ```toml
 [sinks]
+shell = "rclone copy $1 s3:my-bucket/screenshots/"
+# or
 shell = "scp $1 user@host:/var/www/img/"
 # or
-shell = "rclone copy $1 remote:bucket/"
-# or
-shell = "/usr/local/bin/slack-upload $1"
+shell = "/usr/local/bin/upload-shot $1"     # write your own; pbcopy the resulting URL
 ```
 
-The shell-sink runs detached so even a slow uploader never blocks the
-capture pipeline. Output is suppressed; check stderr by running the
-command manually first.
+The shell-sink runs `/bin/sh -c "<your command>" -- <path>` detached, so a slow uploader never blocks the capture pipeline. We don't ship a built-in cloud uploader on purpose: the shell sink + a five-line script gives you every cloud, every storage backend, every team-Slack-bot you could want, without us touching your traffic.
 
-## CLI flags
+## Development
 
 ```sh
-screenshot-ultra --help              # print usage
-screenshot-ultra --version           # print version
-screenshot-ultra --settings-path     # print the absolute path to settings.toml
-screenshot-ultra --print-defaults    # print the default settings.toml to stdout
+# Iterate without a bundle (logs to stderr; useful during debugging)
+make run
+
+# Build a release .app bundle
+make app
+open "dist/Screenshot Ultra.app"
+
+# Pre-commit gate: fmt + clippy + tests
+make check
+
+# Manual test plan for release sign-off
+$EDITOR tests/MANUAL.md
 ```
 
-Run without flags to launch the menu-bar agent.
+CI runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, and a release `.app` build on every push. Tags `v*.*.*` fan out to the [Release workflow](.github/workflows/release.yml) which builds a universal (arm64 + x86_64) binary, `lipo`s them together, and attaches the `.zip` + SHA-256 to a GitHub release. The docs site rebuilds on every push to `main`.
 
-## Logging
+## Documentation
 
-Every event is one JSON line in `~/Library/Logs/ScreenshotUltra/log.ndjson`:
+The [docs site](https://mpjhorner.github.io/ScreenshotUltra/) is the canonical user-facing reference:
 
-```json
-{"ts":"2026-05-11T14:25:01.327Z","evt":"capture","mode":"region","bytes":284113,"fmt":"png","saved_to":"…","sinks":["disk","clipboard"],"duration_ms":47}
-```
+- **[Install](https://mpjhorner.github.io/ScreenshotUltra/install/)** — `.zip`, manual, build-from-source, Gatekeeper, permissions
+- **[Quick start](https://mpjhorner.github.io/ScreenshotUltra/quick-start/)** — first capture in 30 seconds
+- **[Hotkeys](https://mpjhorner.github.io/ScreenshotUltra/hotkeys/)** — every binding, every key, hot-reload semantics
+- **[Capture modes](https://mpjhorner.github.io/ScreenshotUltra/capture/)** — region / window / fullscreen / timed / clipboard / repeat / pin
+- **[Annotation editor](https://mpjhorner.github.io/ScreenshotUltra/editor/)** — eleven tools, colour palette, width picker, save semantics
+- **[Sinks & shell](https://mpjhorner.github.io/ScreenshotUltra/sinks/)** — clipboard / disk / arbitrary shell command
+- **[Configuration](https://mpjhorner.github.io/ScreenshotUltra/configuration/)** — every `settings.toml` field
+- **[Logging](https://mpjhorner.github.io/ScreenshotUltra/logging/)** — NDJSON event schema, every `evt` type, `jq` recipes
+- **[Changelog](https://mpjhorner.github.io/ScreenshotUltra/changelog/)** — every release
 
-Grep, pipe to `jq`, or just `tail -f` while debugging.
+In-repo:
+- **[plan.md](plan.md)** — the implementation plan and design intent
+- **[docs/milestones/](docs/milestones/)** — per-milestone delivery tracking
+- **[tests/MANUAL.md](tests/MANUAL.md)** — manual test checklist for release sign-off
 
-The same payload (minus the `ts`) is also appended to
-`<save_folder>/.screenshot-ultra/index.ndjson` — a per-folder history
-index that travels with your screenshots.
+## Sister projects
 
-## Roadmap
+Part of the **Ultra** family of local-first developer tools:
 
-- **M1** — Press the key (shipped). ✅
-- **M2** — Annotate: native annotation editor with arrows, blur, crop, undo/redo.
-- **M3** — Record: video + GIF, system audio, mouse highlight.
-- **M4** — Scroll & Beautify: scrolling capture, padding/gradient/frames.
-- **M5** — OCR & polish: Apple Vision OCR, ruler, color picker.
-- **M6** — Ship: signed + notarised DMG, Homebrew cask, v1.0.
+- **[MailBox Ultra](https://github.com/MPJHorner/MailboxUltra)** — local SMTP fake inbox with native WebKit HTML preview.
+- **[Postbin Ultra](https://github.com/MPJHorner/PostbinUltra)** — local HTTP request inspector with JSON tree view, forward + replay.
+- **[IDE Ultra](https://github.com/MPJHorner/IdeUltra)** — local-first native code IDE in pure Rust + egui.
 
-See [`docs/milestones/`](docs/milestones/) for per-milestone breakdowns.
+Same posture across all four: native, snappy, local-first, no telemetry, MIT.
+
+## Contributing
+
+Issues and pull requests welcome. `make check` before submitting; if you're adding a capture mode or an editor tool, add a unit test alongside (filename templating, shape geometry, settings parsing — all have working examples in `src/`).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE) © 2026 Matt Horner.
