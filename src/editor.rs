@@ -289,6 +289,10 @@ mod mac {
         redo_stack: Vec<Annotation>,
         current: Option<Annotation>,
         source_path: PathBuf,
+        /// Buttons for the visual "currently selected" indicator.
+        tool_buttons: Vec<(Tool, Retained<NSButton>)>,
+        color_buttons: Vec<(Rgba, Retained<NSButton>)>,
+        width_buttons: Vec<(f64, Retained<NSButton>)>,
     }
 
     thread_local! {
@@ -304,7 +308,13 @@ mod mac {
         EDITOR.with(|slot| *slot.borrow_mut() = None);
 
         match build(mtm, image_path) {
-            Ok(state) => EDITOR.with(|slot| *slot.borrow_mut() = Some(state)),
+            Ok(state) => EDITOR.with(|slot| {
+                let mut g = slot.borrow_mut();
+                *g = Some(state);
+                if let Some(s) = g.as_ref() {
+                    refresh_button_state(s);
+                }
+            }),
             Err(err) => eprintln!("editor: build failed: {err}"),
         }
     }
@@ -863,6 +873,7 @@ mod mac {
         EDITOR.with(|slot| {
             if let Some(state) = slot.borrow_mut().as_mut() {
                 state.tool = tool;
+                refresh_button_state(state);
             }
         });
     }
@@ -871,6 +882,7 @@ mod mac {
         EDITOR.with(|slot| {
             if let Some(state) = slot.borrow_mut().as_mut() {
                 state.color = color;
+                refresh_button_state(state);
             }
         });
     }
@@ -879,8 +891,31 @@ mod mac {
         EDITOR.with(|slot| {
             if let Some(state) = slot.borrow_mut().as_mut() {
                 state.width = width;
+                refresh_button_state(state);
             }
         });
+    }
+
+    /// Toggle each toolbar button's `state` to reflect the currently-selected
+    /// tool / colour / width. Cocoa's NSButton renders the "on" state with
+    /// a pressed-in highlight which is exactly what we want for a radio-style
+    /// picker without bothering with NSButtonType::Toggle.
+    fn refresh_button_state(state: &EditorState) {
+        for (tool, btn) in &state.tool_buttons {
+            let on = *tool == state.tool;
+            unsafe { btn.setState(if on { 1 } else { 0 }) };
+        }
+        for (color, btn) in &state.color_buttons {
+            let on = (*color == state.color)
+                // Highlighter pins to HIGHLIGHT internally; the palette
+                // still shows whichever colour the user picked last.
+                || (state.tool == Tool::Highlight && *color == Rgba::YELLOW);
+            unsafe { btn.setState(if on { 1 } else { 0 }) };
+        }
+        for (w, btn) in &state.width_buttons {
+            let on = (state.width - *w).abs() < 0.5;
+            unsafe { btn.setState(if on { 1 } else { 0 }) };
+        }
     }
 
     /// Place a numbered counter circle at `point` and commit immediately
@@ -1324,6 +1359,12 @@ mod mac {
 
         let handler: Retained<Handler> = unsafe { msg_send![Handler::alloc(), init] };
 
+        // Captured for the EditorState so set_tool / set_color / set_width
+        // can flash the active button.
+        let mut tool_buttons: Vec<(Tool, Retained<NSButton>)> = Vec::new();
+        let mut color_buttons: Vec<(Rgba, Retained<NSButton>)> = Vec::new();
+        let mut width_buttons: Vec<(f64, Retained<NSButton>)> = Vec::new();
+
         let make_button = |label: &str, tag: isize, x: f64, y: f64, w: f64, h: f64| {
             let title = NSString::from_str(label);
             unsafe {
@@ -1351,26 +1392,26 @@ mod mac {
             let row_y_top = TOOLBAR_H + view_h + 40.0;
             let row_y_bot = TOOLBAR_H + view_h + 8.0;
 
-            let tools = [
-                ("Pen P", 10),
-                ("Line L", 11),
-                ("Arrow A", 12),
-                ("Rect R", 13),
-                ("Ellipse E", 14),
-                ("Hilite H", 15),
-                ("Redact X", 16),
-                ("# N", 17),
-                ("Text T", 18),
-                ("Blur B", 19),
-                ("Crop C", 25),
+            let tools_meta = [
+                ("Pen P", 10, Tool::Pen),
+                ("Line L", 11, Tool::Line),
+                ("Arrow A", 12, Tool::Arrow),
+                ("Rect R", 13, Tool::Rect),
+                ("Ellipse E", 14, Tool::Ellipse),
+                ("Hilite H", 15, Tool::Highlight),
+                ("Redact X", 16, Tool::Redact),
+                ("# N", 17, Tool::Counter),
+                ("Text T", 18, Tool::Text),
+                ("Blur B", 19, Tool::Blur),
+                ("Crop C", 25, Tool::Crop),
             ];
             let tool_btn_w = 58.0;
             let tool_btn_h = 24.0;
             let tool_gap = 4.0;
-            let tool_total =
-                (tool_btn_w * tools.len() as f64) + (tool_gap * (tools.len() as f64 - 1.0));
+            let tool_total = (tool_btn_w * tools_meta.len() as f64)
+                + (tool_gap * (tools_meta.len() as f64 - 1.0));
             let tool_start_x = (view_w - tool_total).max(8.0) / 2.0;
-            for (i, (label, tag)) in tools.iter().enumerate() {
+            for (i, (label, tag, tool)) in tools_meta.iter().enumerate() {
                 let btn = make_button(
                     label,
                     *tag,
@@ -1380,35 +1421,42 @@ mod mac {
                     tool_btn_h,
                 );
                 unsafe { content_view.addSubview(&btn) };
+                tool_buttons.push((*tool, btn));
             }
 
             // Colour swatches + width on row 2.
             let palette = [
-                ("● Red", 20),
-                ("● Yellow", 21),
-                ("● Green", 22),
-                ("● Blue", 23),
-                ("● Black", 24),
+                ("● Red", 20, Rgba::RED),
+                ("● Yellow", 21, Rgba::YELLOW),
+                ("● Green", 22, Rgba::GREEN),
+                ("● Blue", 23, Rgba::BLUE),
+                ("● Black", 24, Rgba::BLACK),
             ];
-            let widths = [("Thin 1", 30), ("Med 2", 31), ("Thick 3", 32)];
+            let widths_meta = [
+                ("Thin 1", 30, 3.0_f64),
+                ("Med 2", 31, 6.0),
+                ("Thick 3", 32, 12.0),
+            ];
             let p_w = 70.0;
             let w_w = 60.0;
             let gap2 = 4.0;
             let row2_total = (p_w * palette.len() as f64)
                 + (gap2 * (palette.len() as f64 - 1.0))
                 + 16.0
-                + (w_w * widths.len() as f64)
-                + (gap2 * (widths.len() as f64 - 1.0));
+                + (w_w * widths_meta.len() as f64)
+                + (gap2 * (widths_meta.len() as f64 - 1.0));
             let mut x = (view_w - row2_total).max(8.0) / 2.0;
-            for (label, tag) in palette.iter() {
+            for (label, tag, color) in palette.iter() {
                 let btn = make_button(label, *tag, x, row_y_bot, p_w, tool_btn_h);
                 unsafe { content_view.addSubview(&btn) };
+                color_buttons.push((*color, btn));
                 x += p_w + gap2;
             }
             x += 16.0;
-            for (label, tag) in widths.iter() {
+            for (label, tag, w) in widths_meta.iter() {
                 let btn = make_button(label, *tag, x, row_y_bot, w_w, tool_btn_h);
                 unsafe { content_view.addSubview(&btn) };
+                width_buttons.push((*w, btn));
                 x += w_w + gap2;
             }
 
@@ -1465,6 +1513,9 @@ mod mac {
             redo_stack: Vec::new(),
             current: None,
             source_path: image_path.to_path_buf(),
+            tool_buttons,
+            color_buttons,
+            width_buttons,
         })
     }
 

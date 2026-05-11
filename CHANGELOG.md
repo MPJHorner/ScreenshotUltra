@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — active-selection indicators
+- Tool, colour, and stroke-width buttons now visually reflect the
+  current selection via `NSButton.state` (Cocoa renders the "on" state
+  with a pressed-in highlight). No more guessing which tool is active.
+- `set_tool` / `set_color` / `set_width` refresh button state in lockstep.
+- Initial state seeded from `open()` so the default `Pen / Red / Thin`
+  shows highlighted on first paint.
+
 ### Added — Crop tool
 - **Crop tool** (`C`) — drag a yellow guide rectangle, release to crop
   the image to that region. The window resizes to the new aspect ratio,
