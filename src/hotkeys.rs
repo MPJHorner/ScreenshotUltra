@@ -18,6 +18,7 @@ pub enum Action {
     SilentWindow,
     PinLast,
     RepeatLast,
+    OpenClipboardImage,
 }
 
 impl Action {
@@ -31,6 +32,7 @@ impl Action {
             Action::SilentWindow => "silent_window",
             Action::PinLast => "pin_last",
             Action::RepeatLast => "repeat_last",
+            Action::OpenClipboardImage => "open_clipboard_image",
         }
     }
     pub fn label(self) -> &'static str {
@@ -43,6 +45,7 @@ impl Action {
             Action::SilentWindow => "Window (silent)",
             Action::PinLast => "Pin last capture",
             Action::RepeatLast => "Repeat last capture",
+            Action::OpenClipboardImage => "Open clipboard image",
         }
     }
     pub fn show_tray(self) -> bool {
@@ -76,6 +79,7 @@ pub fn register_all(cfg: &Hotkeys) -> Result<Registered> {
         (Action::SilentWindow, cfg.silent_window.clone()),
         (Action::PinLast, cfg.pin_last.clone()),
         (Action::RepeatLast, cfg.repeat_last.clone()),
+        (Action::OpenClipboardImage, cfg.open_clipboard_image.clone()),
     ] {
         // Empty string = intentionally unbound. Skip silently.
         if accel.trim().is_empty() {
@@ -213,12 +217,11 @@ mod tests {
 
     #[test]
     fn register_all_skips_empty_bindings() {
-        // Default config has empty silent_* slots; only 5 bindings should
-        // register (region, fullscreen, window, pin_last, repeat_last).
+        // Default config has empty silent_* slots; the rest should register.
         let cfg = Hotkeys::default();
         let reg = register_all(&cfg).unwrap();
-        // 3 captures (region/window/fullscreen) + pin_last + repeat_last = 5
-        assert_eq!(reg.actions.len(), 5);
+        // region/window/fullscreen + pin_last + repeat_last + open_clipboard_image = 6
+        assert_eq!(reg.actions.len(), 6);
         // None should be a silent_* action since they're empty by default.
         assert!(reg.actions.iter().all(|(a, _)| !matches!(
             a,

@@ -32,6 +32,43 @@ pub fn clipboard_copy_image(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Pull a PNG image out of the macOS clipboard and write it to `out`.
+/// Returns `Ok(true)` if an image was extracted, `Ok(false)` if the
+/// clipboard didn't contain an image (not an error — just nothing to do),
+/// `Err(_)` on I/O or scripting failures.
+///
+/// Uses `osascript` so we don't need to pull in a Cocoa pasteboard binding
+/// for this one-off path.
+pub fn clipboard_paste_image_to(out: &Path) -> Result<bool> {
+    let out_str = out.to_string_lossy().into_owned();
+    let script = format!(
+        "try
+    set png to the clipboard as «class PNGf»
+    set f to (open for access POSIX file \"{out_str}\" with write permission)
+    set eof of f to 0
+    write png to f
+    close access f
+    return \"ok\"
+on error
+    return \"no-image\"
+end try"
+    );
+    let output = Command::new("/usr/bin/osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .context("running osascript for clipboard paste")?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    match stdout.as_str() {
+        "ok" => Ok(true),
+        "no-image" => Ok(false),
+        other => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("osascript paste returned unexpected output: {other} / {stderr}")
+        }
+    }
+}
+
 /// Run a shell command with the captured file path substituted for `$1`.
 /// The command is executed via `/bin/sh -c "<cmd>" -- <path>` so users can
 /// write idiomatic shell with quoting, pipes, env vars, etc. We do not

@@ -15,8 +15,9 @@ mod tray;
 use anyhow::{Context, Result};
 use global_hotkey::GlobalHotKeyEvent;
 use std::sync::Arc;
+use std::time::Duration;
 use tao::event::Event;
-use tao::event_loop::{ControlFlow, EventLoopBuilder};
+use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
 use tray_icon::menu::MenuEvent;
 
 use crate::capture::CaptureMode;
@@ -26,6 +27,7 @@ use crate::settings::Settings;
 pub enum UserEvent {
     Hotkey(GlobalHotKeyEvent),
     Menu(MenuEvent),
+    ReloadSettings,
 }
 
 fn main() -> Result<()> {
@@ -54,17 +56,21 @@ fn main() -> Result<()> {
         let _ = proxy_menu.send_event(UserEvent::Menu(e));
     }));
 
-    let registered = hotkeys::register_all(&settings.hotkeys)?;
+    let mut registered = hotkeys::register_all(&settings.hotkeys)?;
     let _tray = tray::build()?; // keep alive for the lifetime of the app
-    let settings = Arc::new(settings);
+    let mut settings = Arc::new(settings);
 
     eprintln!(
         "Screenshot Ultra v{} — menu-bar agent running. Default hotkeys:",
         env!("CARGO_PKG_VERSION")
     );
-    for (action, accel) in &registered.actions {
-        eprintln!("  {:<14} {}", action.label(), accel);
-    }
+    print_bindings(&registered);
+
+    // Watch settings.toml in a background thread and post a ReloadSettings
+    // user event whenever the file's mtime changes. The main thread handles
+    // the reload so we don't have to wrestle with thread-safety inside
+    // hotkeys::register_all (which holds OS-level handles).
+    spawn_settings_watcher(event_loop.create_proxy());
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -128,9 +134,60 @@ fn main() -> Result<()> {
                     Some(tray::MenuAction::Quit) => *control_flow = ControlFlow::Exit,
                     None => {}
                 },
+                UserEvent::ReloadSettings => match Settings::load_or_default() {
+                    Ok(new) => match hotkeys::register_all(&new.hotkeys) {
+                        Ok(new_reg) => {
+                            registered = new_reg;
+                            settings = Arc::new(new);
+                            eprintln!("settings reloaded — bindings now:");
+                            print_bindings(&registered);
+                            logging::event(serde_json::json!({"evt": "settings_reloaded"}));
+                        }
+                        Err(err) => {
+                            eprintln!(
+                                "settings reload: invalid hotkeys, keeping previous: {err:#}"
+                            );
+                            logging::event(serde_json::json!({
+                                "evt": "settings_reload_error",
+                                "error": format!("{err:#}"),
+                            }));
+                        }
+                    },
+                    Err(err) => {
+                        eprintln!("settings reload: parse failed, keeping previous: {err:#}");
+                    }
+                },
             }
         }
     })
+}
+
+fn print_bindings(registered: &hotkeys::Registered) {
+    for (action, accel) in &registered.actions {
+        eprintln!("  {:<22} {}", action.label(), accel);
+    }
+}
+
+/// Watch `settings.toml` on a background thread and post `ReloadSettings`
+/// when it changes. mtime polling at 1 Hz is plenty for an interactive
+/// config file; we don't need inotify/FSEvents complexity here.
+fn spawn_settings_watcher(proxy: EventLoopProxy<UserEvent>) {
+    std::thread::spawn(move || {
+        let Ok(path) = Settings::path() else {
+            return;
+        };
+        let mut last = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        loop {
+            std::thread::sleep(Duration::from_secs(1));
+            let now = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+            if now != last && now.is_some() {
+                last = now;
+                if proxy.send_event(UserEvent::ReloadSettings).is_err() {
+                    return; // main loop is gone; stop watching.
+                }
+            }
+        }
+    });
 }
 
 /// Handle one-shot CLI flags. Returns true when the program should exit
@@ -215,6 +272,14 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
             }
             return;
         }
+        hotkeys::Action::OpenClipboardImage => {
+            match capture::from_clipboard(settings) {
+                Ok(true) => {}
+                Ok(false) => eprintln!("open_clipboard_image: no image on the clipboard"),
+                Err(err) => eprintln!("open_clipboard_image: {err:#}"),
+            }
+            return;
+        }
         _ => {}
     }
 
@@ -222,7 +287,9 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
         hotkeys::Action::Region | hotkeys::Action::SilentRegion => CaptureMode::Region,
         hotkeys::Action::Fullscreen | hotkeys::Action::SilentFullscreen => CaptureMode::Fullscreen,
         hotkeys::Action::Window | hotkeys::Action::SilentWindow => CaptureMode::Window,
-        hotkeys::Action::PinLast | hotkeys::Action::RepeatLast => unreachable!(),
+        hotkeys::Action::PinLast
+        | hotkeys::Action::RepeatLast
+        | hotkeys::Action::OpenClipboardImage => unreachable!(),
     };
     run_capture(mode, action.show_tray(), settings);
 }

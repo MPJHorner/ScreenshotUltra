@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added — M2 (in progress)
+- **Settings hot-reload** — `settings.toml` is watched in a background thread
+  and changes are applied within ~1 s. Invalid hotkeys keep the previous
+  binding (with a log message) instead of crashing.
+- **Open clipboard image** (default `⌃⌥⌘E`) — pulls a PNG off the macOS
+  clipboard, saves it to the normal save folder, and runs it through the
+  Quick Tray.
+- **Release workflow** — `.github/workflows/release.yml` builds a universal
+  (arm64 + x86_64) `.app`, zips it via `ditto`, and uploads to a tagged
+  GitHub release with a SHA-256 sidecar. Unsigned for now; signing in M6.
+- **Manual test plan** at `tests/MANUAL.md` for release sign-off.
 - **Shell sink** — `sinks.shell = "scp $1 user@host:/path/"` runs an
   arbitrary shell command with the capture's file path as `$1`. Spawned
   detached so a slow uploader can't stall capture.

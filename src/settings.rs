@@ -55,6 +55,10 @@ pub struct Hotkeys {
     /// Repeat the previous capture mode. Empty = unbound.
     #[serde(default)]
     pub repeat_last: String,
+    /// Paste the clipboard's image and run it through the Quick Tray flow.
+    /// Empty = unbound.
+    #[serde(default)]
+    pub open_clipboard_image: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -98,6 +102,7 @@ impl Default for Hotkeys {
             silent_window: String::new(),
             pin_last: "ctrl+alt+cmd+period".into(),
             repeat_last: "ctrl+alt+cmd+r".into(),
+            open_clipboard_image: "ctrl+alt+cmd+e".into(),
         }
     }
 }

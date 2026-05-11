@@ -17,6 +17,49 @@ use crate::quick_tray;
 use crate::settings::Settings;
 use crate::sinks;
 
+/// Pull a PNG image off the clipboard, save it as a normal capture, and
+/// show the Quick Tray. Returns Ok(true) if an image was found, Ok(false)
+/// if the clipboard had no image (caller may want to log this).
+pub fn from_clipboard(settings: &Settings) -> Result<bool> {
+    let folder = settings.general.save_folder_expanded();
+    std::fs::create_dir_all(&folder)
+        .with_context(|| format!("creating save folder {}", folder.display()))?;
+    let path = render_path(
+        &folder,
+        CaptureMode::Region, // tag clipboard captures as "region" for now
+        &settings.general.filename_template,
+        "png", // clipboard image always lands as PNG
+    );
+    let path = path.with_extension("png");
+
+    let got_image =
+        sinks::clipboard_paste_image_to(&path).context("reading image from clipboard")?;
+    if !got_image {
+        return Ok(false);
+    }
+
+    let bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let event = serde_json::json!({
+        "evt": "clipboard_image",
+        "bytes": bytes,
+        "saved_to": path.display().to_string(),
+    });
+    logging::event(event.clone());
+    write_history_index(&folder, &event);
+
+    quick_tray::show(&path, settings.general.quick_tray_timeout_ms);
+
+    if let Ok(mut guard) = LAST.lock() {
+        *guard = Some(LastCapture {
+            mode: CaptureMode::Region,
+            show_tray: true,
+            path,
+        });
+    }
+
+    Ok(true)
+}
+
 static SEQ: AtomicU32 = AtomicU32::new(1);
 
 /// Remembers the most recent successful capture so "pin last" and

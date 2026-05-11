@@ -53,6 +53,7 @@ Recording, then launch the app again.
 | Region capture (Quick Tray)     | `⌃⌥⌘1`    | Standard flow: shows the floating tray     |
 | Window capture (Quick Tray)     | `⌃⌥⌘2`    | Interactive window selection               |
 | Fullscreen capture (Quick Tray) | `⌃⌥⌘3`    | Standard flow: shows the floating tray     |
+| Open clipboard image            | `⌃⌥⌘E`    | Pastes a clipboard image into the same flow |
 | Repeat last capture             | `⌃⌥⌘R`    | Re-runs the previous mode                  |
 | Pin last capture to screen      | `⌃⌥⌘.`    | Floating always-on-top window              |
 | Region / Window / Fullscreen (silent) | _unset_ | Set `silent_*` in settings to enable |
@@ -64,7 +65,9 @@ copy to clipboard — useful when you want zero-latency capture for piping
 into other tools.
 
 All hotkeys are rebindable in
-`~/Library/Application Support/ScreenshotUltra/settings.toml`.
+`~/Library/Application Support/ScreenshotUltra/settings.toml`. Edits take
+effect within ~1 s — no app restart needed. Invalid bindings keep the
+previous setting (with a log line) so you can't lock yourself out.
 
 The full roadmap of hotkeys (window, scrolling, video, GIF, etc.) is in
 [`plan.md` §3](plan.md#3-hotkeys--the-centerpiece).
