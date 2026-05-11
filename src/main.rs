@@ -3,7 +3,9 @@
 // M1 milestone: menu-bar agent + global hotkey listener + region/fullscreen
 // capture via macOS `screencapture` CLI + clipboard + disk sinks + NDJSON log.
 
+mod about;
 mod capture;
+mod editor;
 mod hotkeys;
 mod logging;
 mod pin;
@@ -116,6 +118,10 @@ fn main() -> Result<()> {
                     Some(tray::MenuAction::RepeatLast) => {
                         handle_action(hotkeys::Action::RepeatLast, &settings)
                     }
+                    Some(tray::MenuAction::Timed3s) => run_timed(3, &settings),
+                    Some(tray::MenuAction::Timed5s) => run_timed(5, &settings),
+                    Some(tray::MenuAction::Timed10s) => run_timed(10, &settings),
+                    Some(tray::MenuAction::About) => about::show(),
                     Some(tray::MenuAction::OpenFolder) => {
                         let _ = std::process::Command::new("open")
                             .arg(settings.general.save_folder_expanded())
@@ -302,6 +308,18 @@ fn run_capture(mode: CaptureMode, show_tray: bool, settings: &Settings) {
             "evt": "error",
             "where": "capture",
             "mode": mode.as_str(),
+            "error": format!("{err:#}"),
+        }));
+    }
+}
+
+fn run_timed(delay_secs: u32, settings: &Settings) {
+    if let Err(err) = capture::run_timed_fullscreen(delay_secs, settings) {
+        eprintln!("timed capture failed: {err:#}");
+        logging::event(serde_json::json!({
+            "evt": "error",
+            "where": "capture_timed",
+            "delay_s": delay_secs,
             "error": format!("{err:#}"),
         }));
     }

@@ -16,9 +16,13 @@ pub enum MenuAction {
     SilentWindow,
     PinLast,
     RepeatLast,
+    Timed3s,
+    Timed5s,
+    Timed10s,
     OpenFolder,
     RevealSettings,
     RevealLog,
+    About,
     Quit,
 }
 
@@ -31,9 +35,13 @@ struct Ids {
     silent_window: MenuId,
     pin_last: MenuId,
     repeat_last: MenuId,
+    timed_3s: MenuId,
+    timed_5s: MenuId,
+    timed_10s: MenuId,
     open_folder: MenuId,
     reveal_settings: MenuId,
     reveal_log: MenuId,
+    about: MenuId,
     quit: MenuId,
 }
 
@@ -49,9 +57,13 @@ pub fn build() -> Result<TrayIcon> {
     let silent_fullscreen = MenuItem::new("Fullscreen (silent)", true, None);
     let pin_last = MenuItem::new("Pin Last Capture\t⌃⌥⌘.", true, None);
     let repeat_last = MenuItem::new("Repeat Last Capture\t⌃⌥⌘R", true, None);
+    let timed_3s = MenuItem::new("Fullscreen in 3 s", true, None);
+    let timed_5s = MenuItem::new("Fullscreen in 5 s", true, None);
+    let timed_10s = MenuItem::new("Fullscreen in 10 s", true, None);
     let open_folder = MenuItem::new("Open Save Folder", true, None);
     let reveal_settings = MenuItem::new("Edit settings.toml…", true, None);
     let reveal_log = MenuItem::new("Reveal Log File", true, None);
+    let about = MenuItem::new("About Screenshot Ultra…", true, None);
     let quit = MenuItem::new("Quit Screenshot Ultra", true, None);
 
     let ids = Ids {
@@ -63,9 +75,13 @@ pub fn build() -> Result<TrayIcon> {
         silent_window: silent_window.id().clone(),
         pin_last: pin_last.id().clone(),
         repeat_last: repeat_last.id().clone(),
+        timed_3s: timed_3s.id().clone(),
+        timed_5s: timed_5s.id().clone(),
+        timed_10s: timed_10s.id().clone(),
         open_folder: open_folder.id().clone(),
         reveal_settings: reveal_settings.id().clone(),
         reveal_log: reveal_log.id().clone(),
+        about: about.id().clone(),
         quit: quit.id().clone(),
     };
     let _ = IDS.set(ids);
@@ -81,10 +97,15 @@ pub fn build() -> Result<TrayIcon> {
     menu.append(&pin_last).ok();
     menu.append(&repeat_last).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
+    menu.append(&timed_3s).ok();
+    menu.append(&timed_5s).ok();
+    menu.append(&timed_10s).ok();
+    menu.append(&PredefinedMenuItem::separator()).ok();
     menu.append(&open_folder).ok();
     menu.append(&reveal_settings).ok();
     menu.append(&reveal_log).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
+    menu.append(&about).ok();
     menu.append(&quit).ok();
 
     let icon = make_icon();
@@ -118,12 +139,20 @@ pub fn menu_action(id: &MenuId) -> Option<MenuAction> {
         Some(MenuAction::PinLast)
     } else if id == &ids.repeat_last {
         Some(MenuAction::RepeatLast)
+    } else if id == &ids.timed_3s {
+        Some(MenuAction::Timed3s)
+    } else if id == &ids.timed_5s {
+        Some(MenuAction::Timed5s)
+    } else if id == &ids.timed_10s {
+        Some(MenuAction::Timed10s)
     } else if id == &ids.open_folder {
         Some(MenuAction::OpenFolder)
     } else if id == &ids.reveal_settings {
         Some(MenuAction::RevealSettings)
     } else if id == &ids.reveal_log {
         Some(MenuAction::RevealLog)
+    } else if id == &ids.about {
+        Some(MenuAction::About)
     } else if id == &ids.quit {
         Some(MenuAction::Quit)
     } else {

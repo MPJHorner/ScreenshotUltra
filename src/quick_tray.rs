@@ -118,15 +118,9 @@ mod mac {
                 }));
             }
             Action::Edit => {
-                // Until our native editor lands (later in M2), bounce
-                // through Apple Preview which has built-in markup tools.
-                let _ = std::process::Command::new("open")
-                    .arg("-a")
-                    .arg("Preview")
-                    .arg(&path)
-                    .status();
+                crate::editor::open(&path);
                 crate::logging::event(serde_json::json!({
-                    "evt": "tray_action", "action": "edit_in_preview",
+                    "evt": "tray_action", "action": "edit",
                 }));
             }
             Action::OpenFolder => {

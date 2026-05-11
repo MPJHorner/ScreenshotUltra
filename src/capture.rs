@@ -94,6 +94,93 @@ impl CaptureMode {
     }
 }
 
+/// Run a fullscreen capture after a `delay_seconds` countdown handled by
+/// `screencapture -T`. The user sees the OS-level shutter behavior. Always
+/// shows the Quick Tray (the silent variant doesn't make sense with a
+/// delay — if you want it silent, just don't use this).
+pub fn run_timed_fullscreen(delay_seconds: u32, settings: &Settings) -> Result<()> {
+    let start = Instant::now();
+    let folder = settings.general.save_folder_expanded();
+    std::fs::create_dir_all(&folder)
+        .with_context(|| format!("creating save folder {}", folder.display()))?;
+    let path = render_path(
+        &folder,
+        CaptureMode::Fullscreen,
+        &settings.general.filename_template,
+        &settings.general.default_image_format,
+    );
+
+    let mut cmd = Command::new("/usr/sbin/screencapture");
+    cmd.arg("-x")
+        .arg("-t")
+        .arg(&settings.general.default_image_format)
+        .arg("-T")
+        .arg(delay_seconds.to_string());
+    if settings.capture.include_cursor {
+        cmd.arg("-C");
+    }
+    if settings.capture.fullscreen_scope.as_str() == "main" {
+        cmd.arg("-m");
+    }
+    cmd.arg(&path);
+
+    let status = cmd
+        .status()
+        .with_context(|| "running /usr/sbin/screencapture -T")?;
+    if !status.success() {
+        anyhow::bail!("screencapture exited with status {status}");
+    }
+    if !path.exists() {
+        logging::event(serde_json::json!({
+            "evt": "capture_cancelled",
+            "mode": "fullscreen_timed",
+            "delay_s": delay_seconds,
+        }));
+        return Ok(());
+    }
+
+    let bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let mut sinks_fired = vec!["disk"];
+    if settings.sinks.clipboard
+        && settings.general.copy_on_capture
+        && sinks::clipboard_copy_image(&path).is_ok()
+    {
+        sinks_fired.push("clipboard");
+    }
+    if !settings.sinks.shell.trim().is_empty()
+        && matches!(sinks::shell_sink(&settings.sinks.shell, &path), Ok(true))
+    {
+        sinks_fired.push("shell");
+    }
+    if settings.general.play_shutter_sound {
+        sinks::play_shutter();
+    }
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+    let event = serde_json::json!({
+        "evt": "capture",
+        "mode": "fullscreen_timed",
+        "delay_s": delay_seconds,
+        "bytes": bytes,
+        "fmt": settings.general.default_image_format,
+        "saved_to": path.display().to_string(),
+        "sinks": sinks_fired,
+        "duration_ms": duration_ms,
+    });
+    logging::event(event.clone());
+    write_history_index(&folder, &event);
+
+    quick_tray::show(&path, settings.general.quick_tray_timeout_ms);
+    if let Ok(mut guard) = LAST.lock() {
+        *guard = Some(LastCapture {
+            mode: CaptureMode::Fullscreen,
+            show_tray: true,
+            path,
+        });
+    }
+    Ok(())
+}
+
 pub fn run(mode: CaptureMode, show_tray: bool, settings: &Settings) -> Result<()> {
     let start = Instant::now();
     let folder = settings.general.save_folder_expanded();

@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added — M2 (in progress)
+- **Native annotation editor** — opens captured images in a real
+  `NSWindow` with a custom `CanvasView` that paints the image + freehand
+  red strokes. Shortcuts: ⌘S save (overwrites the original), ⌘C copy
+  annotated PNG to clipboard, ⌘Z undo last stroke, ⌘W close. Toolbar
+  mirrors the shortcuts plus a "Clear" button.
+- The Quick Tray's **Edit** button now opens the native editor (was
+  bouncing through Apple Preview).
+- **Timed fullscreen captures** — Tray menu offers `Fullscreen in 3 / 5 / 10 s`.
+  Uses `screencapture -T` so the OS-level countdown runs.
+- **About window** — `NSAlert` with version, description, and an
+  "Open GitHub" button.
 - **Panic crash handler** writes a report to
   `~/Library/Logs/ScreenshotUltra/crashes/<timestamp>.txt` and emits a
   `panic` NDJSON event. No auto-send, ever (per plan §11).

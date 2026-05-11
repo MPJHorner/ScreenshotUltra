@@ -8,12 +8,15 @@ capture mode.
 
 ## Scope (from plan.md §13)
 
-- [ ] Editor window (egui) with these tools and their shortcuts:
-      arrow (A), rectangle (R), ellipse (O), line (L), pen (P),
-      highlighter (H), text (T), numbered counter (N), blur (B), redact (X),
-      crop (C), undo/redo (⌘Z / ⌘⇧Z), copy (⌘C), save (⌘S), save as (⌘⇧S).
+- [~] Editor window — MVP shipped: native `NSWindow` + custom `CanvasView`
+      via `objc2`. Single tool (freehand pen, red, 3 px), ⌘S save, ⌘C
+      copy, ⌘Z undo, ⌘W close, Clear button.  *Remaining tools (arrow,
+      rect, ellipse, line, highlighter, text, counter, blur, redact, crop)
+      land in follow-up commits — the canvas + render-back-to-PNG
+      pipeline is in place.*
 - [ ] Color palette + custom hex; stroke width picker (1–24 px).
-- [ ] History stack (full undo/redo).
+      *(Single red colour for now.)*
+- [~] History stack — undo only; redo is the next obvious add.
 - [x] Window capture mode — `screencapture -W -o` (interactive selection
       via the macOS window-capture cursor, drop shadow trimmed). Default
       hotkey `⌃⌥⌘2`. *(Native `CGWindowListCopyWindowInfo`-driven hover
