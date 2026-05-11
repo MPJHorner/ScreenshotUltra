@@ -18,6 +18,7 @@ Preview.
 | Redact       | `X`      | Filled black rectangle — for hiding sensitive info        |
 | Counter      | `N`      | Click drops a numbered circle (auto-increments)           |
 | Text         | `T`      | Click prompts for text, places it at the click point      |
+| Blur         | `B`      | Drag a rectangle; pixelates the underlying image inside   |
 
 ## Colours
 
@@ -59,7 +60,6 @@ full original resolution — no quality loss from the bitmap re-encode.
 
 ## What's not in the editor yet
 
-- Blur tool (Core Image gaussian blur on a selection)
 - Crop tool
 - Custom colour picker / hex input
 - Layers panel / shape selection / move-existing

@@ -1,11 +1,11 @@
 // Annotation editor. Opens the captured image in an NSWindow with a custom
 // canvas; supports Pen / Line / Arrow / Rectangle / Ellipse / Highlighter /
-// Redact tools, a five-colour palette, and a three-step stroke-width
-// picker. ⌘S saves the annotated PNG over the original, ⌘C copies it to
-// the clipboard, ⌘Z / ⌘⇧Z undo/redo, ⌘W closes. Toolbars mirror the
-// keyboard shortcuts.
+// Redact / Counter / Text / Blur tools, a five-colour palette, and a
+// three-step stroke-width picker. ⌘S saves the annotated PNG over the
+// original, ⌘C copies it to the clipboard, ⌘Z / ⌘⇧Z undo/redo, ⌘W closes.
+// Toolbars mirror the keyboard shortcuts.
 //
-// Remaining tools planned: Text, Numbered Counter, Blur, Crop.
+// Remaining tools planned: Crop, custom colour picker.
 
 #[cfg(not(target_os = "macos"))]
 pub fn open(_image_path: &std::path::Path) {}
@@ -43,6 +43,7 @@ mod mac {
         Redact,
         Counter,
         Text,
+        Blur,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq)]
@@ -100,6 +101,7 @@ mod mac {
         Ellipse { from: NSPoint, to: NSPoint },
         Counter { center: NSPoint, number: u32 },
         Text { origin: NSPoint, content: String },
+        Blur { from: NSPoint, to: NSPoint },
     }
 
     /// A drawn shape plus its style. Captured at mouseDown so later changes
@@ -146,6 +148,10 @@ mod mac {
                     origin: start,
                     content: String::new(),
                 },
+                Tool::Blur => Shape::Blur {
+                    from: start,
+                    to: start,
+                },
             }
         }
         fn update(&mut self, point: NSPoint) {
@@ -154,7 +160,8 @@ mod mac {
                 Shape::Line { to, .. }
                 | Shape::Arrow { to, .. }
                 | Shape::Rect { to, .. }
-                | Shape::Ellipse { to, .. } => {
+                | Shape::Ellipse { to, .. }
+                | Shape::Blur { to, .. } => {
                     *to = point;
                 }
                 Shape::Counter { center, .. } => *center = point,
@@ -167,7 +174,8 @@ mod mac {
                 Shape::Line { from, to }
                 | Shape::Arrow { from, to }
                 | Shape::Rect { from, to }
-                | Shape::Ellipse { from, to } => {
+                | Shape::Ellipse { from, to }
+                | Shape::Blur { from, to } => {
                     (from.x - to.x).abs() > 2.0 || (from.y - to.y).abs() > 2.0
                 }
                 Shape::Counter { .. } => true,
@@ -206,6 +214,10 @@ mod mac {
                 Shape::Text { origin, content } => Shape::Text {
                     origin: s(origin),
                     content: content.clone(),
+                },
+                Shape::Blur { from, to } => Shape::Blur {
+                    from: s(from),
+                    to: s(to),
                 },
             }
         }
@@ -405,6 +417,7 @@ mod mac {
                         "x" | "X" => set_tool(Tool::Redact),
                         "n" | "N" => set_tool(Tool::Counter),
                         "t" | "T" => set_tool(Tool::Text),
+                        "b" | "B" => set_tool(Tool::Blur),
                         "1" => set_width(3.0),
                         "2" => set_width(6.0),
                         "3" => set_width(12.0),
@@ -447,6 +460,7 @@ mod mac {
                     16 => set_tool(Tool::Redact),
                     17 => set_tool(Tool::Counter),
                     18 => set_tool(Tool::Text),
+                    19 => set_tool(Tool::Blur),
                     // Colour palette
                     20 => set_color(Rgba::RED),
                     21 => set_color(Rgba::YELLOW),
@@ -597,11 +611,121 @@ mod mac {
                 draw_text_at(content, *origin, size, a.color);
                 return; /* text draws itself, no path stroke */
             }
+            Shape::Blur { from, to } => {
+                let dst = NSRect {
+                    origin: NSPoint {
+                        x: from.x.min(to.x),
+                        y: from.y.min(to.y),
+                    },
+                    size: NSSize {
+                        width: (to.x - from.x).abs(),
+                        height: (to.y - from.y).abs(),
+                    },
+                };
+                // Pixelate amount tied to the chosen width so the user can
+                // make it chunkier with the Thick width button.
+                let pixel = (a.width * 3.0).max(8.0);
+                pixelate_blur(dst, pixel);
+                return;
+            }
         }
         if a.fill {
             path.fill();
         } else {
             path.stroke();
+        }
+    }
+
+    /// Pixelate the canvas/output bitmap inside `dst`. Reads the source
+    /// image from EDITOR state, computes the equivalent source rect via
+    /// the current view-to-image scale, downsamples to a small bitmap,
+    /// then redraws with nearest-neighbour interpolation. Works for both
+    /// canvas painting (view coords) and save-time painting (pixel coords)
+    /// because we read the source-to-view scale freshly each call.
+    unsafe fn pixelate_blur(dst: NSRect, pixel: f64) {
+        let (image, src_rect) = match EDITOR.with(|slot| {
+            let s = slot.borrow();
+            let state = s.as_ref()?;
+            let sx = state.image_pixel_size.width / state.view_size.width.max(1.0);
+            let sy = state.image_pixel_size.height / state.view_size.height.max(1.0);
+            // `dst` may already be in pixel coords (during save) or view coords.
+            // We discriminate by checking the active graphics context bounds — when
+            // saving, the context's underlying NSBitmapImageRep has dimensions
+            // matching the pixel size, so the destination rect we receive is in
+            // pixel space.  At runtime the canvas is at view_size.  In both cases
+            // we want source_rect in *image* pixel coords. So:
+            let dst_in_image_coords = dst.size.width > state.view_size.width + 8.0
+                || dst.size.height > state.view_size.height + 8.0;
+            let src_rect = if dst_in_image_coords {
+                // dst is already pixel coords
+                dst
+            } else {
+                NSRect {
+                    origin: NSPoint {
+                        x: dst.origin.x * sx,
+                        y: dst.origin.y * sy,
+                    },
+                    size: NSSize {
+                        width: dst.size.width * sx,
+                        height: dst.size.height * sy,
+                    },
+                }
+            };
+            Some((state.image.clone(), src_rect))
+        }) {
+            Some(pair) => pair,
+            None => return,
+        };
+
+        // Build a small NSBitmapImageRep at dst_size / pixel.
+        let small_w = (dst.size.width / pixel).max(2.0) as isize;
+        let small_h = (dst.size.height / pixel).max(2.0) as isize;
+        let small: Retained<NSBitmapImageRep> = match NSBitmapImageRep::initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bitmapFormat_bytesPerRow_bitsPerPixel(
+            NSBitmapImageRep::alloc(),
+            std::ptr::null_mut(),
+            small_w,
+            small_h,
+            8,
+            4,
+            true,
+            false,
+            objc2_app_kit::NSDeviceRGBColorSpace,
+            objc2_app_kit::NSBitmapFormat::empty(),
+            0,
+            0,
+        ) {
+            Some(r) => r,
+            None => return,
+        };
+        let small_ctx = match NSGraphicsContext::graphicsContextWithBitmapImageRep(&small) {
+            Some(c) => c,
+            None => return,
+        };
+
+        // Draw the source image's src_rect into the small bitmap.
+        NSGraphicsContext::saveGraphicsState_class();
+        NSGraphicsContext::setCurrentContext(Some(&small_ctx));
+        let dest_in_small = NSRect {
+            origin: NSPoint { x: 0.0, y: 0.0 },
+            size: NSSize {
+                width: small_w as f64,
+                height: small_h as f64,
+            },
+        };
+        image.drawInRect_fromRect_operation_fraction(
+            dest_in_small,
+            src_rect,
+            objc2_app_kit::NSCompositingOperation::SourceOver,
+            1.0,
+        );
+        NSGraphicsContext::restoreGraphicsState_class();
+
+        // Now draw the small bitmap into dst with no interpolation.
+        if let Some(cur) = NSGraphicsContext::currentContext() {
+            cur.saveGraphicsState();
+            cur.setImageInterpolation(objc2_app_kit::NSImageInterpolation::None);
+            small.drawInRect(dst);
+            cur.restoreGraphicsState();
         }
     }
 
@@ -1054,8 +1178,9 @@ mod mac {
                 ("Redact X", 16),
                 ("# N", 17),
                 ("Text T", 18),
+                ("Blur B", 19),
             ];
-            let tool_btn_w = 68.0;
+            let tool_btn_w = 62.0;
             let tool_btn_h = 24.0;
             let tool_gap = 4.0;
             let tool_total =

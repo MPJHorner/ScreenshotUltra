@@ -5,6 +5,18 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Blur tool
+- **Blur tool** (`B`) — pixelate-style privacy filter. Drag to define a
+  rectangle; the tool reads the corresponding sub-rect from the source
+  `NSImage`, downsamples it to `dst_size / (width × 3)` via
+  `NSBitmapImageRep`, then redraws it across the destination rect with
+  `NSImageInterpolation::None` to produce a chunky mosaic. Works in both
+  on-screen painting (view coords) and save rendering (pixel coords)
+  via a single `pixelate_blur` helper that picks coordinate space from
+  context bounds.
+
 ## [0.3.0] — 2026-05-11
 
 The "annotate everything" release. Nine editor tools, full-colour palette,
