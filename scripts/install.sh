@@ -25,17 +25,25 @@ esac
 TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
 
 if [[ -n "${TAG:-}" ]]; then
-  ARCH="$(uname -m)"
-  DMG="ScreenshotUltra-${TAG}-${ARCH}.dmg"
-  URL="https://github.com/${REPO}/releases/download/${TAG}/${DMG}"
+  # We currently ship a universal .zip (signed/notarized .dmg lands in M6).
+  ZIP="ScreenshotUltra-${TAG}-universal.zip"
+  SHA="${ZIP}.sha256"
+  URL="https://github.com/${REPO}/releases/download/${TAG}/${ZIP}"
+  SHA_URL="https://github.com/${REPO}/releases/download/${TAG}/${SHA}"
   TMP="$(mktemp -d)"
-  info "Downloading ${DMG}"
-  if curl -fsSL -o "${TMP}/${DMG}" "${URL}"; then
-    info "Attaching DMG"
-    MOUNT="$(hdiutil attach -nobrowse -quiet "${TMP}/${DMG}" | awk 'END{print $3}')"
-    info "Copying ${APP_NAME}.app to /Applications"
-    cp -R "${MOUNT}/${APP_NAME}.app" /Applications/
-    hdiutil detach -quiet "${MOUNT}" || true
+  info "Downloading ${ZIP}"
+  if curl -fsSL -o "${TMP}/${ZIP}" "${URL}"; then
+    if curl -fsSL -o "${TMP}/${SHA}" "${SHA_URL}" 2>/dev/null; then
+      info "Verifying SHA-256"
+      ( cd "${TMP}" && /usr/bin/shasum -a 256 -c "${SHA}" >/dev/null ) \
+        || { err "checksum mismatch on ${ZIP}"; exit 1; }
+    else
+      info "Skipping SHA-256 (no sidecar file)"
+    fi
+    info "Removing any previous /Applications/${APP_NAME}.app"
+    rm -rf "/Applications/${APP_NAME}.app"
+    info "Expanding ${ZIP} to /Applications"
+    /usr/bin/ditto -xk "${TMP}/${ZIP}" /Applications/
     xattr -dr com.apple.quarantine "/Applications/${APP_NAME}.app" || true
     info "Launching for first-run permissions prompt"
     open "/Applications/${APP_NAME}.app" || true

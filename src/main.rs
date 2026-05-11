@@ -37,6 +37,7 @@ fn main() -> Result<()> {
 
     let settings = Settings::load_or_default().context("loading settings")?;
     logging::init(&settings).context("initialising logging")?;
+    logging::install_panic_handler();
 
     logging::event(serde_json::json!({
         "evt": "startup",

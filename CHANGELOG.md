@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added — M2 (in progress)
+- **Panic crash handler** writes a report to
+  `~/Library/Logs/ScreenshotUltra/crashes/<timestamp>.txt` and emits a
+  `panic` NDJSON event. No auto-send, ever (per plan §11).
+
+### Fixed
+- `scripts/install.sh` downloads the universal `.zip` from the release (was
+  expecting a `.dmg`, which we don't publish yet) and verifies the SHA-256
+  sidecar before installing.
+
+### Added — M2 (earlier this milestone)
 - **Edit button** on the Quick Tray — opens the capture in Apple
   Preview for annotation (markup tools, signatures, redaction). A
   placeholder for the native editor planned later in M2.
