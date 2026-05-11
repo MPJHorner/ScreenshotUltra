@@ -9,11 +9,12 @@ capture mode.
 ## Scope (from plan.md §13)
 
 - [~] Editor window — native `NSWindow` + custom `CanvasView` via `objc2`.
-      **Tools shipped: Pen / Arrow / Rect / Ellipse** with picker buttons
-      and `P` / `A` / `R` / `E` shortcuts. ⌘S save, ⌘C copy, ⌘Z undo,
-      ⌘⇧Z redo, ⌘W close, Clear button. Red, 3 px stroke. *Still to add:
-      Line / Highlighter / Text / Counter / Blur / Redact / Crop / color
-      palette / stroke-width picker.*
+      **Tools shipped: Pen / Line / Arrow / Rect / Ellipse / Highlighter /
+      Redact** (P / L / A / R / E / H / X shortcuts). Five-colour palette
+      (Red / Yellow / Green / Blue / Black) and three-step width picker
+      (Thin / Med / Thick, shortcuts 1/2/3). ⌘S save, ⌘C copy, ⌘Z undo,
+      ⌘⇧Z redo, ⌘W close, Clear button.  *Still to add: Text / Counter /
+      Blur / Crop.*
 - [ ] Color palette + custom hex; stroke width picker (1–24 px).
       *(Single red colour for now.)*
 - [~] History stack — undo only; redo is the next obvious add.

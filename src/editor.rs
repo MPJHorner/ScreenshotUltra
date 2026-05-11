@@ -1,12 +1,11 @@
-// Annotation editor MVP. Opens the captured image in an NSWindow with a
-// custom canvas view on top; pen tool draws red strokes; ⌘S saves the
-// annotated PNG over the original, ⌘C copies to the clipboard, ⌘Z undoes
-// the last stroke, ⌘⌫ clears all strokes. A toolbar at the bottom mirrors
-// the keyboard shortcuts.
+// Annotation editor. Opens the captured image in an NSWindow with a custom
+// canvas; supports Pen / Line / Arrow / Rectangle / Ellipse / Highlighter /
+// Redact tools, a five-colour palette, and a three-step stroke-width
+// picker. ⌘S saves the annotated PNG over the original, ⌘C copies it to
+// the clipboard, ⌘Z / ⌘⇧Z undo/redo, ⌘W closes. Toolbars mirror the
+// keyboard shortcuts.
 //
-// Scope: single tool (freehand pen) with one color. More tools (arrow,
-// rectangle, ellipse, text, blur, crop, color picker, stroke width) land
-// in follow-up commits.
+// Remaining tools planned: Text, Numbered Counter, Blur, Crop.
 
 #[cfg(not(target_os = "macos"))]
 pub fn open(_image_path: &std::path::Path) {}
@@ -36,30 +35,97 @@ mod mac {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum Tool {
         Pen,
+        Line,
         Arrow,
         Rect,
         Ellipse,
+        Highlight,
+        Redact,
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    struct Rgba {
+        r: f64,
+        g: f64,
+        b: f64,
+        a: f64,
+    }
+    impl Rgba {
+        const RED: Rgba = Rgba {
+            r: 1.0,
+            g: 0.24,
+            b: 0.33,
+            a: 1.0,
+        };
+        const YELLOW: Rgba = Rgba {
+            r: 1.0,
+            g: 0.86,
+            b: 0.18,
+            a: 1.0,
+        };
+        const GREEN: Rgba = Rgba {
+            r: 0.22,
+            g: 0.78,
+            b: 0.40,
+            a: 1.0,
+        };
+        const BLUE: Rgba = Rgba {
+            r: 0.22,
+            g: 0.55,
+            b: 0.95,
+            a: 1.0,
+        };
+        const BLACK: Rgba = Rgba {
+            r: 0.05,
+            g: 0.05,
+            b: 0.05,
+            a: 1.0,
+        };
+        const HIGHLIGHT: Rgba = Rgba {
+            r: 1.0,
+            g: 0.92,
+            b: 0.30,
+            a: 0.35,
+        };
     }
 
     #[derive(Clone, Debug)]
     enum Shape {
         Pen { points: Vec<NSPoint> },
+        Line { from: NSPoint, to: NSPoint },
         Arrow { from: NSPoint, to: NSPoint },
         Rect { from: NSPoint, to: NSPoint },
         Ellipse { from: NSPoint, to: NSPoint },
     }
 
+    /// A drawn shape plus its style. Captured at mouseDown so later changes
+    /// to the active tool/color don't retroactively repaint prior strokes.
+    #[derive(Clone, Debug)]
+    struct Annotation {
+        shape: Shape,
+        color: Rgba,
+        width: f64,
+        fill: bool,
+        arrowhead: bool,
+    }
+
     impl Shape {
         fn from_tool(tool: Tool, start: NSPoint) -> Self {
+            // Highlight and Redact are visually distinct (alpha + fill) but
+            // geometrically map onto Pen and Rect respectively.
             match tool {
-                Tool::Pen => Shape::Pen {
+                Tool::Pen | Tool::Highlight => Shape::Pen {
                     points: vec![start],
+                },
+                Tool::Line => Shape::Line {
+                    from: start,
+                    to: start,
                 },
                 Tool::Arrow => Shape::Arrow {
                     from: start,
                     to: start,
                 },
-                Tool::Rect => Shape::Rect {
+                Tool::Rect | Tool::Redact => Shape::Rect {
                     from: start,
                     to: start,
                 },
@@ -72,7 +138,10 @@ mod mac {
         fn update(&mut self, point: NSPoint) {
             match self {
                 Shape::Pen { points } => points.push(point),
-                Shape::Arrow { to, .. } | Shape::Rect { to, .. } | Shape::Ellipse { to, .. } => {
+                Shape::Line { to, .. }
+                | Shape::Arrow { to, .. }
+                | Shape::Rect { to, .. }
+                | Shape::Ellipse { to, .. } => {
                     *to = point;
                 }
             }
@@ -80,7 +149,8 @@ mod mac {
         fn is_meaningful(&self) -> bool {
             match self {
                 Shape::Pen { points } => points.len() >= 2,
-                Shape::Arrow { from, to }
+                Shape::Line { from, to }
+                | Shape::Arrow { from, to }
                 | Shape::Rect { from, to }
                 | Shape::Ellipse { from, to } => {
                     (from.x - to.x).abs() > 2.0 || (from.y - to.y).abs() > 2.0
@@ -95,6 +165,10 @@ mod mac {
             match self {
                 Shape::Pen { points } => Shape::Pen {
                     points: points.iter().map(s).collect(),
+                },
+                Shape::Line { from, to } => Shape::Line {
+                    from: s(from),
+                    to: s(to),
                 },
                 Shape::Arrow { from, to } => Shape::Arrow {
                     from: s(from),
@@ -112,6 +186,47 @@ mod mac {
         }
     }
 
+    impl Annotation {
+        fn from_tool(tool: Tool, start: NSPoint, color: Rgba, width: f64) -> Self {
+            // Highlight uses its fixed semi-transparent yellow + a thicker
+            // stroke. Redact is always a filled black rect.
+            let (color, width, fill, arrowhead) = match tool {
+                Tool::Highlight => (Rgba::HIGHLIGHT, width.max(18.0), false, false),
+                Tool::Redact => (Rgba::BLACK, 0.0, true, false),
+                Tool::Arrow => (color, width, false, true),
+                _ => (color, width, false, false),
+            };
+            Annotation {
+                shape: Shape::from_tool(tool, start),
+                color,
+                width,
+                fill,
+                arrowhead,
+            }
+        }
+        fn update(&mut self, point: NSPoint) {
+            self.shape.update(point);
+        }
+        fn is_meaningful(&self) -> bool {
+            self.shape.is_meaningful()
+        }
+        fn scaled(&self, sx: f64, sy: f64) -> Self {
+            Annotation {
+                shape: self.shape.scaled(sx, sy),
+                color: self.color,
+                // For filled redact rects there's no stroke; otherwise
+                // scale width by the larger axis to match the on-screen look.
+                width: if self.fill {
+                    0.0
+                } else {
+                    self.width * sx.max(sy)
+                },
+                fill: self.fill,
+                arrowhead: self.arrowhead,
+            }
+        }
+    }
+
     struct EditorState {
         window: Retained<NSWindow>,
         canvas: Retained<CanvasView>,
@@ -120,9 +235,11 @@ mod mac {
         image_pixel_size: NSSize,
         view_size: NSSize,
         tool: Tool,
-        shapes: Vec<Shape>,
-        redo_stack: Vec<Shape>,
-        current: Option<Shape>,
+        color: Rgba,
+        width: f64,
+        shapes: Vec<Annotation>,
+        redo_stack: Vec<Annotation>,
+        current: Option<Annotation>,
         source_path: PathBuf,
     }
 
@@ -175,7 +292,7 @@ mod mac {
                     unsafe {
                         image.drawInRect(bounds);
                     }
-                    paint_shapes(&shapes, current.as_ref(), 3.0);
+                    paint_annotations(&shapes, current.as_ref());
                 });
             }
 
@@ -185,7 +302,12 @@ mod mac {
                 EDITOR.with(|slot| {
                     if let Some(state) = slot.borrow_mut().as_mut() {
                         state.redo_stack.clear();
-                        state.current = Some(Shape::from_tool(state.tool, location));
+                        state.current = Some(Annotation::from_tool(
+                            state.tool,
+                            location,
+                            state.color,
+                            state.width,
+                        ));
                     }
                 });
                 unsafe { self.setNeedsDisplay(true) };
@@ -225,13 +347,22 @@ mod mac {
                 let shift = mods.contains(objc2_app_kit::NSEventModifierFlags::Shift);
                 let chars = unsafe { event.charactersIgnoringModifiers() };
                 let s = chars.map(|c| c.to_string()).unwrap_or_default();
-                // Tool shortcuts (no Cmd): P/A/R/E
+                // Tool / colour shortcuts (no Cmd):
+                //   tools: P pen, L line, A arrow, R rect, E ellipse,
+                //          H highlight, X redact
+                //   width: 1/2/3 = 3/6/12 px
                 if !cmd {
                     match s.as_str() {
                         "p" | "P" => set_tool(Tool::Pen),
+                        "l" | "L" => set_tool(Tool::Line),
                         "a" | "A" => set_tool(Tool::Arrow),
                         "r" | "R" => set_tool(Tool::Rect),
                         "e" | "E" => set_tool(Tool::Ellipse),
+                        "h" | "H" => set_tool(Tool::Highlight),
+                        "x" | "X" => set_tool(Tool::Redact),
+                        "1" => set_width(3.0),
+                        "2" => set_width(6.0),
+                        "3" => set_width(12.0),
                         _ => {}
                     }
                     return;
@@ -263,9 +394,22 @@ mod mac {
                 match tag {
                     // Tool picker
                     10 => set_tool(Tool::Pen),
-                    11 => set_tool(Tool::Arrow),
-                    12 => set_tool(Tool::Rect),
-                    13 => set_tool(Tool::Ellipse),
+                    11 => set_tool(Tool::Line),
+                    12 => set_tool(Tool::Arrow),
+                    13 => set_tool(Tool::Rect),
+                    14 => set_tool(Tool::Ellipse),
+                    15 => set_tool(Tool::Highlight),
+                    16 => set_tool(Tool::Redact),
+                    // Colour palette
+                    20 => set_color(Rgba::RED),
+                    21 => set_color(Rgba::YELLOW),
+                    22 => set_color(Rgba::GREEN),
+                    23 => set_color(Rgba::BLUE),
+                    24 => set_color(Rgba::BLACK),
+                    // Stroke width
+                    30 => set_width(3.0),
+                    31 => set_width(6.0),
+                    32 => set_width(12.0),
                     // Actions
                     1 => save_to_disk(),
                     2 => copy_to_clipboard(),
@@ -279,24 +423,27 @@ mod mac {
         }
     );
 
-    // ---- Shape painting (called from drawRect:) ------------------------
+    // ---- Annotation painting (called from drawRect:) -------------------
 
-    fn paint_shapes(shapes: &[Shape], current: Option<&Shape>, width: f64) {
-        unsafe {
-            let red = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.24, 0.33, 1.0);
-            red.setStroke();
-            for shape in shapes.iter().chain(current) {
-                paint_one(shape, width);
-            }
+    fn paint_annotations(shapes: &[Annotation], current: Option<&Annotation>) {
+        for a in shapes.iter().chain(current) {
+            unsafe { paint_one(a) };
         }
     }
 
-    unsafe fn paint_one(shape: &Shape, width: f64) {
+    unsafe fn paint_one(a: &Annotation) {
+        let color =
+            NSColor::colorWithSRGBRed_green_blue_alpha(a.color.r, a.color.g, a.color.b, a.color.a);
+        if a.fill {
+            color.setFill();
+        } else {
+            color.setStroke();
+        }
         let path = NSBezierPath::bezierPath();
-        path.setLineWidth(width);
+        path.setLineWidth(a.width);
         path.setLineCapStyle(objc2_app_kit::NSLineCapStyle::Round);
         path.setLineJoinStyle(objc2_app_kit::NSLineJoinStyle::Round);
-        match shape {
+        match &a.shape {
             Shape::Pen { points } => {
                 if points.len() < 2 {
                     return;
@@ -306,32 +453,36 @@ mod mac {
                     path.lineToPoint(*p);
                 }
             }
+            Shape::Line { from, to } => {
+                path.moveToPoint(*from);
+                path.lineToPoint(*to);
+            }
             Shape::Arrow { from, to } => {
                 path.moveToPoint(*from);
                 path.lineToPoint(*to);
-                // Arrowhead: two short lines at the tip.
-                let dx = to.x - from.x;
-                let dy = to.y - from.y;
-                let len = (dx * dx + dy * dy).sqrt().max(0.0001);
-                let ux = dx / len;
-                let uy = dy / len;
-                let head_len = (width * 5.0).max(12.0);
-                let head_angle = 0.5_f64; /* ~28.6 degrees */
-                let cos_a = head_angle.cos();
-                let sin_a = head_angle.sin();
-                // Two perpendicular rotated unit vectors pointing back from `to`.
-                let left = NSPoint {
-                    x: to.x - head_len * (ux * cos_a + uy * sin_a),
-                    y: to.y - head_len * (uy * cos_a - ux * sin_a),
-                };
-                let right = NSPoint {
-                    x: to.x - head_len * (ux * cos_a - uy * sin_a),
-                    y: to.y - head_len * (uy * cos_a + ux * sin_a),
-                };
-                path.moveToPoint(*to);
-                path.lineToPoint(left);
-                path.moveToPoint(*to);
-                path.lineToPoint(right);
+                if a.arrowhead {
+                    // Arrowhead: two short lines at the tip.
+                    let dx = to.x - from.x;
+                    let dy = to.y - from.y;
+                    let len = (dx * dx + dy * dy).sqrt().max(0.0001);
+                    let ux = dx / len;
+                    let uy = dy / len;
+                    let head_len = (a.width * 5.0).max(12.0);
+                    let cos_a = 0.5_f64.cos();
+                    let sin_a = 0.5_f64.sin();
+                    let left = NSPoint {
+                        x: to.x - head_len * (ux * cos_a + uy * sin_a),
+                        y: to.y - head_len * (uy * cos_a - ux * sin_a),
+                    };
+                    let right = NSPoint {
+                        x: to.x - head_len * (ux * cos_a - uy * sin_a),
+                        y: to.y - head_len * (uy * cos_a + ux * sin_a),
+                    };
+                    path.moveToPoint(*to);
+                    path.lineToPoint(left);
+                    path.moveToPoint(*to);
+                    path.lineToPoint(right);
+                }
             }
             Shape::Rect { from, to } => {
                 let r = NSRect {
@@ -360,7 +511,11 @@ mod mac {
                 path.appendBezierPathWithOvalInRect(r);
             }
         }
-        path.stroke();
+        if a.fill {
+            path.fill();
+        } else {
+            path.stroke();
+        }
     }
 
     // ---- Actions --------------------------------------------------------
@@ -410,6 +565,22 @@ mod mac {
         EDITOR.with(|slot| {
             if let Some(state) = slot.borrow_mut().as_mut() {
                 state.tool = tool;
+            }
+        });
+    }
+
+    fn set_color(color: Rgba) {
+        EDITOR.with(|slot| {
+            if let Some(state) = slot.borrow_mut().as_mut() {
+                state.color = color;
+            }
+        });
+    }
+
+    fn set_width(width: f64) {
+        EDITOR.with(|slot| {
+            if let Some(state) = slot.borrow_mut().as_mut() {
+                state.width = width;
             }
         });
     }
@@ -512,17 +683,15 @@ mod mac {
                 };
                 image.drawInRect(dest);
 
-                // Map view coords → pixel coords and paint shapes.
+                // Map view coords → pixel coords and paint annotations.
                 let sx = pixel_size.width / view_size.width.max(1.0);
                 let sy = pixel_size.height / view_size.height.max(1.0);
-                let scaled: Vec<Shape> = shapes
+                let scaled: Vec<Annotation> = shapes
                     .iter()
                     .chain(current.as_ref())
-                    .map(|s| s.scaled(sx, sy))
+                    .map(|a| a.scaled(sx, sy))
                     .collect();
-                // Scale the line width too so the saved image matches what
-                // the user saw in the editor.
-                paint_shapes(&scaled, None, sx.max(sy) * 3.0);
+                paint_annotations(&scaled, None);
 
                 NSGraphicsContext::restoreGraphicsState_class();
                 let _ = mtm; // suppress unused-binding warning under cfg variations
@@ -545,7 +714,7 @@ mod mac {
     // ---- Window construction --------------------------------------------
 
     const TOOLBAR_H: f64 = 40.0;
-    const TOOLPICKER_H: f64 = 32.0;
+    const TOOLPICKER_H: f64 = 72.0; /* two rows: tools + (colors + width) */
 
     fn build(mtm: MainThreadMarker, image_path: &Path) -> Result<EditorState, String> {
         let app = NSApplication::sharedApplication(mtm);
@@ -657,30 +826,65 @@ mod mac {
         if let Some(content_view) = window.contentView() {
             unsafe { content_view.addSubview(&canvas) };
 
-            // Top tool-picker row (above the canvas).
+            // Top: tool picker (row 1) + colour palette & width (row 2).
+            let row_y_top = TOOLBAR_H + view_h + 40.0;
+            let row_y_bot = TOOLBAR_H + view_h + 8.0;
+
             let tools = [
-                ("Pen (P)", 10),
-                ("Arrow (A)", 11),
-                ("Rect (R)", 12),
-                ("Ellipse (E)", 13),
+                ("Pen P", 10),
+                ("Line L", 11),
+                ("Arrow A", 12),
+                ("Rect R", 13),
+                ("Ellipse E", 14),
+                ("Hilite H", 15),
+                ("Redact X", 16),
             ];
-            let tool_btn_w = 88.0;
+            let tool_btn_w = 76.0;
             let tool_btn_h = 24.0;
             let tool_gap = 4.0;
             let tool_total =
                 (tool_btn_w * tools.len() as f64) + (tool_gap * (tools.len() as f64 - 1.0));
-            let tool_start_x = (view_w - tool_total) / 2.0;
-            let tool_y = TOOLBAR_H + view_h + (TOOLPICKER_H - tool_btn_h) / 2.0;
+            let tool_start_x = (view_w - tool_total).max(8.0) / 2.0;
             for (i, (label, tag)) in tools.iter().enumerate() {
                 let btn = make_button(
                     label,
                     *tag,
                     tool_start_x + (tool_btn_w + tool_gap) * i as f64,
-                    tool_y,
+                    row_y_top,
                     tool_btn_w,
                     tool_btn_h,
                 );
                 unsafe { content_view.addSubview(&btn) };
+            }
+
+            // Colour swatches + width on row 2.
+            let palette = [
+                ("● Red", 20),
+                ("● Yellow", 21),
+                ("● Green", 22),
+                ("● Blue", 23),
+                ("● Black", 24),
+            ];
+            let widths = [("Thin 1", 30), ("Med 2", 31), ("Thick 3", 32)];
+            let p_w = 70.0;
+            let w_w = 60.0;
+            let gap2 = 4.0;
+            let row2_total = (p_w * palette.len() as f64)
+                + (gap2 * (palette.len() as f64 - 1.0))
+                + 16.0
+                + (w_w * widths.len() as f64)
+                + (gap2 * (widths.len() as f64 - 1.0));
+            let mut x = (view_w - row2_total).max(8.0) / 2.0;
+            for (label, tag) in palette.iter() {
+                let btn = make_button(label, *tag, x, row_y_bot, p_w, tool_btn_h);
+                unsafe { content_view.addSubview(&btn) };
+                x += p_w + gap2;
+            }
+            x += 16.0;
+            for (label, tag) in widths.iter() {
+                let btn = make_button(label, *tag, x, row_y_bot, w_w, tool_btn_h);
+                unsafe { content_view.addSubview(&btn) };
+                x += w_w + gap2;
             }
 
             // Bottom action row.
@@ -729,6 +933,8 @@ mod mac {
                 height: view_h,
             },
             tool: Tool::Pen,
+            color: Rgba::RED,
+            width: 3.0,
             shapes: Vec::new(),
             redo_stack: Vec::new(),
             current: None,

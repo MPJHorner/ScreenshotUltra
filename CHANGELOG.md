@@ -5,6 +5,23 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — editor expansion
+- **Three more editor tools**: Line (no arrowhead), Highlighter
+  (translucent thick yellow), Redact (filled black rectangle). Total now
+  seven: Pen / Line / Arrow / Rect / Ellipse / Highlighter / Redact.
+- **Five-colour palette** (Red / Yellow / Green / Blue / Black) — each
+  annotation captures its colour at draw time so later palette changes
+  don't repaint prior strokes.
+- **Stroke-width picker** (Thin 3 px / Med 6 px / Thick 12 px) with
+  number-key shortcuts `1` / `2` / `3`.
+- New tool shortcuts: `P` Pen, `L` Line, `A` Arrow, `R` Rect, `E`
+  Ellipse, `H` Highlighter, `X` Redact.
+- Editor toolbar grew a second row above the canvas: tools on row 1,
+  colours + width on row 2. Bottom row keeps the actions (Save/Copy/
+  Undo/Redo/Clear/Done).
+
 ## [0.2.0] — 2026-05-11
 
 ### Added — M2 (annotation editor + polish)
