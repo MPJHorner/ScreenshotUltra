@@ -10,7 +10,7 @@ This document is the design. Delivery is tracked per milestone in
 | Milestone | Title              | Status                |
 |-----------|--------------------|-----------------------|
 | [M1](docs/milestones/M1-press-the-key.md)        | Press the key       | ✅ shipped (v0.1.0)   |
-| [M2](docs/milestones/M2-annotate.md)             | Annotate            | 🚧 in progress (Quick Tray, Pin, Window, hot-reload, sinks, mkdocs site shipped) |
+| [M2](docs/milestones/M2-annotate.md)             | Annotate            | ✅ nearly complete (11-tool editor, Pin opacity/zoom, eyedropper, Quick Tray, hot-reload, sinks, site; only Preferences GUI deferred) |
 | [M3](docs/milestones/M3-record.md)               | Record              | ⏳ planned            |
 | [M4](docs/milestones/M4-scroll-and-beautify.md)  | Scroll & Beautify   | ⏳ planned            |
 | [M5](docs/milestones/M5-ocr-and-polish.md)       | OCR & polish        | ⏳ planned            |

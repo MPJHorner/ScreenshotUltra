@@ -1,6 +1,6 @@
 # M2 — Annotate
 
-**Status:** 🚧 in progress
+**Status:** ✅ nearly complete (only Preferences GUI deferred)
 
 **Goal:** A native annotation editor that opens immediately after every
 capture (configurable), plus the Quick Tray, Pin-to-screen, and the Window
@@ -8,53 +8,67 @@ capture mode.
 
 ## Scope (from plan.md §13)
 
-- [~] Editor window — native `NSWindow` + custom `CanvasView` via `objc2`.
-      **Tools shipped: Pen / Line / Arrow / Rect / Ellipse / Highlighter /
-      Redact / Counter / Text** (P / L / A / R / E / H / X / N / T
-      shortcuts) **plus Blur (B) and Crop (C)** — Blur is pixelate-style
-      via nearest-neighbour downscale/upscale; Crop drags a yellow guide
-      and on mouseUp replaces the image, resizes the window and clears
-      annotations. Five-colour palette (Red / Yellow / Green / Blue /
-      Black) and three-step width picker (Thin / Med / Thick, shortcuts
-      1/2/3). ⌘S save, ⌘C copy, ⌘Z undo, ⌘⇧Z redo, ⌘W close, Clear button.
-      *Still to add: custom colour picker / hex input.*
-- [ ] Color palette + custom hex; stroke width picker (1–24 px).
-      *(Single red colour for now.)*
-- [~] History stack — undo only; redo is the next obvious add.
-- [x] Window capture mode — `screencapture -W -o` (interactive selection
-      via the macOS window-capture cursor, drop shadow trimmed). Default
+- [x] **Editor window** — native `NSWindow` + custom `CanvasView` via
+      `objc2`. Eleven tools (`P` Pen, `L` Line, `A` Arrow, `R` Rect,
+      `E` Ellipse, `H` Highlighter, `X` Redact, `N` Counter, `T` Text,
+      `B` Blur, `C` Crop). Five-colour palette (Red / Yellow / Green /
+      Blue / Black) and three-step width picker (Thin / Med / Thick;
+      shortcuts `1` / `2` / `3`). Visual active-button indicators.
+      Tooltips on every button.
+      `⌘S` save, `⌘C` copy, `⌘Z` undo, `⌘⇧Z` redo, `⌘W` close,
+      `Clear` button.
+- [x] **Window capture mode** — `screencapture -W -o`. Default
       hotkey `⌃⌥⌘2`. *(Native `CGWindowListCopyWindowInfo`-driven hover
-      highlight will replace the shell-out alongside ScreenCaptureKit in M3.)*
-- [x] Pin-to-screen (basic): floating, always-on-top `NSWindow` with title
-      bar, sized to the capture aspect ratio. Hotkey `⌃⌥⌘.` and Quick Tray
-      "Pin" button. Multiple pins cascade. *(Frameless mode, opacity
-      scroll, and `⌘+/⌘-` zoom land in a follow-up.)*
-- [x] Quick Tray (post-capture floating panel, bottom-right): Copy / Edit /
-      Folder / Reveal / Pin / Discard buttons, auto-dismiss after
-      `quick_tray_timeout_ms`. Native `NSWindow` via `objc2`.
-- [x] "Edit in Preview" tray button — opens the capture in macOS Preview
-      for annotation. *(A native editor lands later in M2.)*
-- [x] Separate "silent" capture flow (`silent_region` / `silent_fullscreen` /
-      `silent_window` hotkey slots) so users can choose tray-or-no-tray per
-      hotkey.
-- [ ] Basic Preferences window (general + hotkeys tabs) — at this point we
-      have enough surface area to justify a GUI for the bits in settings.toml.
+      highlight will replace the shell-out in M3 alongside
+      ScreenCaptureKit.)*
+- [x] **Pin-to-screen** — floating always-on-top `NSWindow` with
+      title bar, sized to capture aspect ratio. Hotkey `⌃⌥⌘.` and
+      Quick Tray "Pin" button. Multiple pins cascade.
+      **Polish landed:** scroll-wheel opacity (0.3–1.0), `⌘+`/`⌘-`
+      zoom in place, `⌫` / `Esc` to dismiss, `⌘0` resets alpha.
+- [x] **Quick Tray** (post-capture floating panel, bottom-right):
+      Copy / Edit / Folder / Reveal / Pin / Discard buttons; auto-dismiss
+      after `quick_tray_timeout_ms`. Native `NSWindow` via `objc2`.
+- [x] **Silent capture flow** — separate `silent_region` /
+      `silent_window` / `silent_fullscreen` hotkey slots so users can
+      pick tray-or-no-tray per hotkey.
+- [ ] **Preferences GUI window** (general + hotkeys tabs). Currently
+      `settings.toml` covers everything; the file is hot-reloaded within
+      ~1 s of any save. A GUI on top is the only material M2 item still
+      pending — deferred since the TOML path has proved adequate during
+      M2 development.
 
-## Open questions for M2
+## Beyond plan.md §13 — bonus M2 features
 
-- Does the editor canvas need a Metal layer behind egui chrome for drag
-  latency on 6K displays? Profile early (plan.md §15 risk).
-- "Magic-arrow" snap-to-UI-element heuristic — leave for M5 polish?
+- **Repeat last capture** (`⌃⌥⌘R`) + **Open clipboard image** (`⌃⌥⌘E`)
+  + **Eyedropper colour picker** (`⌃⌥⌘P`) — the latter shows macOS's
+  `NSColorSampler` magnifier and copies the picked sRGB hex to the
+  clipboard.
+- **Timed fullscreen captures** (3 / 5 / 10 s) via `screencapture -T`.
+- **Settings hot-reload** — `settings.toml` is watched on a background
+  thread; changes apply within ~1 s without restarting the app.
+  Invalid hotkeys keep the previous binding (with a log line) so you
+  can't lock yourself out.
+- **Shell-sink** — `[sinks].shell = "scp $1 ..."` runs an arbitrary
+  command after every capture (detached).
+- **Crash handler** — panics write a report to
+  `~/Library/Logs/ScreenshotUltra/crashes/`.
+- **CLI flags** — `--version`, `--help`, `--settings-path`,
+  `--print-defaults`.
+- **mkdocs-material docs site** at
+  [mpjhorner.github.io/ScreenshotUltra](https://mpjhorner.github.io/ScreenshotUltra/).
+- **Universal release pipeline** — tag `v*.*.*` → universal `.zip` + SHA-256.
+- **App icon** — aperture-iris SVG (`icon/icon.svg`) rendered into a
+  full `AppIcon.icns` via `scripts/render-icon.sh` + the matching
+  aperture-shaped menu-bar template image in `src/tray.rs`.
 
-## Notes on the Quick Tray shipped today
+## Open questions resolved
 
-- Buttons are `Copy` / `Folder` (open the save folder) / `Reveal`
-  (Finder reveal) / `Discard` (delete the file). The plan's `Pin` and
-  `Drag-out` actions land later in M2 once the editor and Pin-to-screen
-  exist.
-- Implementation lives in `src/quick_tray.rs`. The panel is borderless,
-  non-activating, status-window level, positioned bottom-right of the main
-  screen; corner radius via `CALayer`.
-- The "silent" hotkeys (`silent_region`, `silent_fullscreen`) are unbound
-  by default — set them in `~/Library/Application Support/ScreenshotUltra/settings.toml`
-  to enable both flows side-by-side.
+- "Custom colour picker" was rolled into the editor via the global
+  eyedropper hotkey rather than an editor sub-tool — better UX and the
+  picked hex goes onto the clipboard for use anywhere.
+- "Edit in Preview" tray-button placeholder removed: **Edit** now opens
+  the native editor.
+- Quick Tray ships as a native `NSWindow` (was originally a borderless
+  `NSPanel`; the panel variant didn't actually display under macOS 26
+  + `LSUIElement`).
