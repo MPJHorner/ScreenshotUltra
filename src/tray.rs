@@ -10,18 +10,30 @@ use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 pub enum MenuAction {
     Region,
     Fullscreen,
+    Window,
     SilentRegion,
     SilentFullscreen,
+    SilentWindow,
+    PinLast,
+    RepeatLast,
     OpenFolder,
+    RevealSettings,
+    RevealLog,
     Quit,
 }
 
 struct Ids {
     region: MenuId,
     fullscreen: MenuId,
+    window: MenuId,
     silent_region: MenuId,
     silent_fullscreen: MenuId,
+    silent_window: MenuId,
+    pin_last: MenuId,
+    repeat_last: MenuId,
     open_folder: MenuId,
+    reveal_settings: MenuId,
+    reveal_log: MenuId,
     quit: MenuId,
 }
 
@@ -30,29 +42,48 @@ static IDS: OnceLock<Ids> = OnceLock::new();
 pub fn build() -> Result<TrayIcon> {
     let menu = Menu::new();
     let region = MenuItem::new("Capture Region…\t⌃⌥⌘1", true, None);
+    let window = MenuItem::new("Capture Window…\t⌃⌥⌘2", true, None);
     let fullscreen = MenuItem::new("Capture Fullscreen\t⌃⌥⌘3", true, None);
-    let silent_region = MenuItem::new("Capture Region (silent)", true, None);
-    let silent_fullscreen = MenuItem::new("Capture Fullscreen (silent)", true, None);
+    let silent_region = MenuItem::new("Region (silent)", true, None);
+    let silent_window = MenuItem::new("Window (silent)", true, None);
+    let silent_fullscreen = MenuItem::new("Fullscreen (silent)", true, None);
+    let pin_last = MenuItem::new("Pin Last Capture\t⌃⌥⌘.", true, None);
+    let repeat_last = MenuItem::new("Repeat Last Capture\t⌃⌥⌘R", true, None);
     let open_folder = MenuItem::new("Open Save Folder", true, None);
+    let reveal_settings = MenuItem::new("Edit settings.toml…", true, None);
+    let reveal_log = MenuItem::new("Reveal Log File", true, None);
     let quit = MenuItem::new("Quit Screenshot Ultra", true, None);
 
     let ids = Ids {
         region: region.id().clone(),
         fullscreen: fullscreen.id().clone(),
+        window: window.id().clone(),
         silent_region: silent_region.id().clone(),
         silent_fullscreen: silent_fullscreen.id().clone(),
+        silent_window: silent_window.id().clone(),
+        pin_last: pin_last.id().clone(),
+        repeat_last: repeat_last.id().clone(),
         open_folder: open_folder.id().clone(),
+        reveal_settings: reveal_settings.id().clone(),
+        reveal_log: reveal_log.id().clone(),
         quit: quit.id().clone(),
     };
     let _ = IDS.set(ids);
 
     menu.append(&region).ok();
+    menu.append(&window).ok();
     menu.append(&fullscreen).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
     menu.append(&silent_region).ok();
+    menu.append(&silent_window).ok();
     menu.append(&silent_fullscreen).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
+    menu.append(&pin_last).ok();
+    menu.append(&repeat_last).ok();
+    menu.append(&PredefinedMenuItem::separator()).ok();
     menu.append(&open_folder).ok();
+    menu.append(&reveal_settings).ok();
+    menu.append(&reveal_log).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
     menu.append(&quit).ok();
 
@@ -75,12 +106,24 @@ pub fn menu_action(id: &MenuId) -> Option<MenuAction> {
         Some(MenuAction::Region)
     } else if id == &ids.fullscreen {
         Some(MenuAction::Fullscreen)
+    } else if id == &ids.window {
+        Some(MenuAction::Window)
     } else if id == &ids.silent_region {
         Some(MenuAction::SilentRegion)
     } else if id == &ids.silent_fullscreen {
         Some(MenuAction::SilentFullscreen)
+    } else if id == &ids.silent_window {
+        Some(MenuAction::SilentWindow)
+    } else if id == &ids.pin_last {
+        Some(MenuAction::PinLast)
+    } else if id == &ids.repeat_last {
+        Some(MenuAction::RepeatLast)
     } else if id == &ids.open_folder {
         Some(MenuAction::OpenFolder)
+    } else if id == &ids.reveal_settings {
+        Some(MenuAction::RevealSettings)
+    } else if id == &ids.reveal_log {
+        Some(MenuAction::RevealLog)
     } else if id == &ids.quit {
         Some(MenuAction::Quit)
     } else {

@@ -37,12 +37,24 @@ pub struct Hotkeys {
     pub region: String,
     /// Fullscreen capture with Quick Tray (the standard flow). Empty = unbound.
     pub fullscreen: String,
+    /// Window capture with Quick Tray. Empty = unbound.
+    #[serde(default)]
+    pub window: String,
     /// Region capture, silent: save to disk + clipboard, no UI. Empty = unbound.
     #[serde(default)]
     pub silent_region: String,
     /// Fullscreen capture, silent. Empty = unbound.
     #[serde(default)]
     pub silent_fullscreen: String,
+    /// Window capture, silent. Empty = unbound.
+    #[serde(default)]
+    pub silent_window: String,
+    /// Pin the most recent capture to the screen. Empty = unbound.
+    #[serde(default)]
+    pub pin_last: String,
+    /// Repeat the previous capture mode. Empty = unbound.
+    #[serde(default)]
+    pub repeat_last: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -70,8 +82,12 @@ impl Default for Hotkeys {
         Self {
             region: "ctrl+alt+cmd+1".into(),
             fullscreen: "ctrl+alt+cmd+3".into(),
+            window: "ctrl+alt+cmd+2".into(),
             silent_region: String::new(),
             silent_fullscreen: String::new(),
+            silent_window: String::new(),
+            pin_last: "ctrl+alt+cmd+period".into(),
+            repeat_last: "ctrl+alt+cmd+r".into(),
         }
     }
 }
@@ -131,4 +147,85 @@ pub fn expand_tilde(path: &str) -> PathBuf {
         }
     }
     PathBuf::from(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn defaults_serialise_and_round_trip() {
+        let s = Settings::default();
+        let raw = toml::to_string_pretty(&s).unwrap();
+        let back: Settings = toml::from_str(&raw).unwrap();
+        assert_eq!(s.general.save_folder, back.general.save_folder);
+        assert_eq!(s.hotkeys.region, back.hotkeys.region);
+        assert_eq!(s.hotkeys.pin_last, back.hotkeys.pin_last);
+        assert_eq!(s.sinks.clipboard, back.sinks.clipboard);
+    }
+
+    #[test]
+    fn partial_toml_uses_defaults_for_missing_sections() {
+        // Old config without the new hotkey slots — should still parse.
+        let raw = r#"
+            [general]
+            save_folder = "~/foo"
+            filename_template = "x"
+            default_image_format = "png"
+            copy_on_capture = false
+            play_shutter_sound = false
+            show_in_dock = true
+
+            [hotkeys]
+            region = "ctrl+1"
+            fullscreen = "ctrl+3"
+            window = ""
+            silent_region = ""
+            silent_fullscreen = ""
+            silent_window = ""
+            pin_last = ""
+            repeat_last = ""
+
+            [sinks]
+            clipboard = true
+            disk = true
+        "#;
+        let s: Settings = toml::from_str(raw).unwrap();
+        assert_eq!(s.general.save_folder, "~/foo");
+        assert!(!s.general.copy_on_capture);
+        // quick_tray_timeout_ms wasn't in the toml — should default to 6000.
+        assert_eq!(s.general.quick_tray_timeout_ms, 6000);
+    }
+
+    #[test]
+    fn empty_silent_slots_are_acceptable() {
+        let mut s = Settings::default();
+        s.hotkeys.silent_region = String::new();
+        s.hotkeys.silent_fullscreen = String::new();
+        let raw = toml::to_string(&s).unwrap();
+        let back: Settings = toml::from_str(&raw).unwrap();
+        assert!(back.hotkeys.silent_region.is_empty());
+        assert!(back.hotkeys.silent_fullscreen.is_empty());
+    }
+
+    #[test]
+    fn tilde_expansion() {
+        let p = expand_tilde("~/Pictures/foo");
+        assert!(p.is_absolute());
+        assert!(p.ends_with("Pictures/foo"));
+        assert!(!p.to_string_lossy().contains('~'));
+    }
+
+    #[test]
+    fn tilde_alone_resolves_to_home() {
+        let p = expand_tilde("~");
+        assert!(p.is_absolute());
+        assert_eq!(p, dirs::home_dir().unwrap());
+    }
+
+    #[test]
+    fn non_tilde_paths_pass_through() {
+        let p = expand_tilde("/tmp/foo");
+        assert_eq!(p, PathBuf::from("/tmp/foo"));
+    }
 }

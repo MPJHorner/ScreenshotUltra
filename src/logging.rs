@@ -49,3 +49,9 @@ fn log_path() -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home dir"))?;
     Ok(home.join("Library/Logs/ScreenshotUltra/log.ndjson"))
 }
+
+/// Resolve the log file path for the "Reveal Log File" menu item.
+/// Falls back to the user's home dir if `$HOME` is unset (unlikely on macOS).
+pub fn log_path_for_reveal() -> PathBuf {
+    log_path().unwrap_or_else(|_| PathBuf::from("."))
+}

@@ -6,6 +6,7 @@
 mod capture;
 mod hotkeys;
 mod logging;
+mod pin;
 mod quick_tray;
 mod settings;
 mod sinks;
@@ -86,15 +87,38 @@ fn main() -> Result<()> {
                     Some(tray::MenuAction::Fullscreen) => {
                         handle_action(hotkeys::Action::Fullscreen, &settings)
                     }
+                    Some(tray::MenuAction::Window) => {
+                        handle_action(hotkeys::Action::Window, &settings)
+                    }
                     Some(tray::MenuAction::SilentRegion) => {
                         handle_action(hotkeys::Action::SilentRegion, &settings)
                     }
                     Some(tray::MenuAction::SilentFullscreen) => {
                         handle_action(hotkeys::Action::SilentFullscreen, &settings)
                     }
+                    Some(tray::MenuAction::SilentWindow) => {
+                        handle_action(hotkeys::Action::SilentWindow, &settings)
+                    }
+                    Some(tray::MenuAction::PinLast) => {
+                        handle_action(hotkeys::Action::PinLast, &settings)
+                    }
+                    Some(tray::MenuAction::RepeatLast) => {
+                        handle_action(hotkeys::Action::RepeatLast, &settings)
+                    }
                     Some(tray::MenuAction::OpenFolder) => {
                         let _ = std::process::Command::new("open")
                             .arg(settings.general.save_folder_expanded())
+                            .status();
+                    }
+                    Some(tray::MenuAction::RevealSettings) => {
+                        if let Ok(path) = settings::Settings::path() {
+                            let _ = std::process::Command::new("open").arg(&path).status();
+                        }
+                    }
+                    Some(tray::MenuAction::RevealLog) => {
+                        let _ = std::process::Command::new("open")
+                            .arg("-R")
+                            .arg(logging::log_path_for_reveal())
                             .status();
                     }
                     Some(tray::MenuAction::Quit) => *control_flow = ControlFlow::Exit,
@@ -106,11 +130,40 @@ fn main() -> Result<()> {
 }
 
 fn handle_action(action: hotkeys::Action, settings: &Settings) {
+    match action {
+        hotkeys::Action::PinLast => {
+            match capture::last() {
+                Some(last) => {
+                    pin::pin(&last.path);
+                    logging::event(serde_json::json!({
+                        "evt": "pin",
+                        "path": last.path.display().to_string(),
+                    }));
+                }
+                None => eprintln!("pin: no previous capture to pin"),
+            }
+            return;
+        }
+        hotkeys::Action::RepeatLast => {
+            match capture::last() {
+                Some(last) => run_capture(last.mode, last.show_tray, settings),
+                None => eprintln!("repeat_last: no previous capture"),
+            }
+            return;
+        }
+        _ => {}
+    }
+
     let mode = match action {
         hotkeys::Action::Region | hotkeys::Action::SilentRegion => CaptureMode::Region,
         hotkeys::Action::Fullscreen | hotkeys::Action::SilentFullscreen => CaptureMode::Fullscreen,
+        hotkeys::Action::Window | hotkeys::Action::SilentWindow => CaptureMode::Window,
+        hotkeys::Action::PinLast | hotkeys::Action::RepeatLast => unreachable!(),
     };
-    let show_tray = action.show_tray();
+    run_capture(mode, action.show_tray(), settings);
+}
+
+fn run_capture(mode: CaptureMode, show_tray: bool, settings: &Settings) {
     if let Err(err) = capture::run(mode, show_tray, settings) {
         eprintln!("capture failed: {err:#}");
         logging::event(serde_json::json!({

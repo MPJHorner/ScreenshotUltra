@@ -8,13 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added — M2 (in progress)
-- Quick Tray: a floating bottom-right panel that appears after a capture with
-  Copy / Folder / Reveal / Discard buttons and auto-dismisses after
-  `quick_tray_timeout_ms` (default 6 s). Native `NSPanel` via `objc2`.
-- Silent capture variants (`silent_region`, `silent_fullscreen`) — separate
-  hotkey slots that skip the tray and just save+copy. Unbound by default;
-  set them in `settings.toml` to enable.
-- Tray menu now lists both standard and silent variants.
+- **Window capture mode** (default `⌃⌥⌘2`) — interactive window selection
+  via `screencapture -W`, with the window's drop shadow trimmed off.
+- **Pin-to-screen** (default `⌃⌥⌘.`) — floating always-on-top window holding
+  the most recent capture. Multiple pins supported; each cascades 24 px
+  from the previous. Pin button added to the Quick Tray.
+- **Repeat last capture** (default `⌃⌥⌘R`) — re-runs whatever mode you used
+  last with the same tray-or-silent behaviour.
+- Tray menu: `Edit settings.toml…`, `Reveal Log File`.
+- Tray actions for every capture mode plus pin/repeat, mirroring hotkeys.
+- 22 unit tests across hotkey parsing, settings serialisation, capture
+  templating, and pin-window sizing.
+
+### Added — M2 (earlier)
+- Quick Tray: a floating bottom-right window that appears after a capture
+  with Copy / Folder / Reveal / Pin / Discard buttons and auto-dismisses
+  after `quick_tray_timeout_ms` (default 6 s). Native `NSWindow` via
+  `objc2`; promotes the app to `.Accessory` activation policy on demand so
+  the window actually draws for `LSUIElement` background apps.
+- Silent capture variants (`silent_region`, `silent_fullscreen`,
+  `silent_window`) — separate hotkey slots that skip the tray and just
+  save+copy. Unbound by default; set them in `settings.toml` to enable.
 
 ### Added — M1 "Press the key"
 - Menu-bar agent (`LSUIElement = true`) with a status-bar icon and basic menu.

@@ -14,10 +14,14 @@ capture mode.
       crop (C), undo/redo (⌘Z / ⌘⇧Z), copy (⌘C), save (⌘S), save as (⌘⇧S).
 - [ ] Color palette + custom hex; stroke width picker (1–24 px).
 - [ ] History stack (full undo/redo).
-- [ ] Window capture mode — hover to highlight, click to capture, synthesised
-      drop shadow toggle.
-- [ ] Pin-to-screen: floating, frameless, always-on-top, opacity scroll,
-      ⌘+/− zoom, ⌫ to dismiss; multiple pins supported.
+- [x] Window capture mode — `screencapture -W -o` (interactive selection
+      via the macOS window-capture cursor, drop shadow trimmed). Default
+      hotkey `⌃⌥⌘2`. *(Native `CGWindowListCopyWindowInfo`-driven hover
+      highlight will replace the shell-out alongside ScreenCaptureKit in M3.)*
+- [x] Pin-to-screen (basic): floating, always-on-top `NSWindow` with title
+      bar, sized to the capture aspect ratio. Hotkey `⌃⌥⌘.` and Quick Tray
+      "Pin" button. Multiple pins cascade. *(Frameless mode, opacity
+      scroll, and `⌘+/⌘-` zoom land in a follow-up.)*
 - [x] Quick Tray (post-capture floating thumbnail, bottom-right):
       Copy / Folder / Reveal / Discard buttons, auto-dismiss after
       `quick_tray_timeout_ms`. ✅ shipped — native `NSPanel` via `objc2`.

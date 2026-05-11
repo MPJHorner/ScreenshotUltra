@@ -12,8 +12,12 @@ use crate::settings::Hotkeys;
 pub enum Action {
     Region,
     Fullscreen,
+    Window,
     SilentRegion,
     SilentFullscreen,
+    SilentWindow,
+    PinLast,
+    RepeatLast,
 }
 
 impl Action {
@@ -21,20 +25,28 @@ impl Action {
         match self {
             Action::Region => "region",
             Action::Fullscreen => "fullscreen",
+            Action::Window => "window",
             Action::SilentRegion => "silent_region",
             Action::SilentFullscreen => "silent_fullscreen",
+            Action::SilentWindow => "silent_window",
+            Action::PinLast => "pin_last",
+            Action::RepeatLast => "repeat_last",
         }
     }
     pub fn label(self) -> &'static str {
         match self {
             Action::Region => "Region (tray)",
             Action::Fullscreen => "Fullscreen (tray)",
+            Action::Window => "Window (tray)",
             Action::SilentRegion => "Region (silent)",
             Action::SilentFullscreen => "Fullscreen (silent)",
+            Action::SilentWindow => "Window (silent)",
+            Action::PinLast => "Pin last capture",
+            Action::RepeatLast => "Repeat last capture",
         }
     }
     pub fn show_tray(self) -> bool {
-        matches!(self, Action::Region | Action::Fullscreen)
+        matches!(self, Action::Region | Action::Fullscreen | Action::Window)
     }
 }
 
@@ -58,8 +70,12 @@ pub fn register_all(cfg: &Hotkeys) -> Result<Registered> {
     for (action, accel) in [
         (Action::Region, cfg.region.clone()),
         (Action::Fullscreen, cfg.fullscreen.clone()),
+        (Action::Window, cfg.window.clone()),
         (Action::SilentRegion, cfg.silent_region.clone()),
         (Action::SilentFullscreen, cfg.silent_fullscreen.clone()),
+        (Action::SilentWindow, cfg.silent_window.clone()),
+        (Action::PinLast, cfg.pin_last.clone()),
+        (Action::RepeatLast, cfg.repeat_last.clone()),
     ] {
         // Empty string = intentionally unbound. Skip silently.
         if accel.trim().is_empty() {
@@ -146,4 +162,67 @@ fn parse_code(s: &str) -> Result<Code> {
         "esc" | "escape" => Code::Escape,
         other => anyhow::bail!("unsupported key: {other}"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_simple_accelerator() {
+        let hk = parse("ctrl+alt+cmd+1").unwrap();
+        assert!(hk.mods.contains(Modifiers::CONTROL));
+        assert!(hk.mods.contains(Modifiers::ALT));
+        assert!(hk.mods.contains(Modifiers::SUPER));
+        assert_eq!(hk.key, Code::Digit1);
+    }
+
+    #[test]
+    fn accepts_modifier_aliases() {
+        let hk = parse("control+option+command+r").unwrap();
+        assert!(hk.mods.contains(Modifiers::CONTROL));
+        assert!(hk.mods.contains(Modifiers::ALT));
+        assert!(hk.mods.contains(Modifiers::SUPER));
+        assert_eq!(hk.key, Code::KeyR);
+    }
+
+    #[test]
+    fn parses_punctuation_keys() {
+        let hk = parse("ctrl+alt+cmd+.").unwrap();
+        assert_eq!(hk.key, Code::Period);
+        let hk = parse("ctrl+alt+cmd+period").unwrap();
+        assert_eq!(hk.key, Code::Period);
+    }
+
+    #[test]
+    fn rejects_modifier_only_binding() {
+        assert!(parse("ctrl+alt+cmd").is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_key() {
+        let err = parse("ctrl+alt+cmd+f25").unwrap_err();
+        assert!(format!("{err}").contains("unsupported key"));
+    }
+
+    #[test]
+    fn whitespace_is_tolerated() {
+        let hk = parse(" ctrl + alt + cmd + 3 ").unwrap();
+        assert_eq!(hk.key, Code::Digit3);
+    }
+
+    #[test]
+    fn register_all_skips_empty_bindings() {
+        // Default config has empty silent_* slots; only 5 bindings should
+        // register (region, fullscreen, window, pin_last, repeat_last).
+        let cfg = Hotkeys::default();
+        let reg = register_all(&cfg).unwrap();
+        // 3 captures (region/window/fullscreen) + pin_last + repeat_last = 5
+        assert_eq!(reg.actions.len(), 5);
+        // None should be a silent_* action since they're empty by default.
+        assert!(reg.actions.iter().all(|(a, _)| !matches!(
+            a,
+            Action::SilentRegion | Action::SilentFullscreen | Action::SilentWindow
+        )));
+    }
 }

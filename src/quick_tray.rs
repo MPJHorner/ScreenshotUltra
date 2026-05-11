@@ -29,6 +29,7 @@ mod mac {
         Copy,
         OpenFolder,
         RevealInFinder,
+        Pin,
         Discard,
     }
 
@@ -72,7 +73,8 @@ mod mac {
                     1 => Action::Copy,
                     2 => Action::OpenFolder,
                     3 => Action::RevealInFinder,
-                    4 => Action::Discard,
+                    4 => Action::Pin,
+                    5 => Action::Discard,
                     _ => return,
                 };
                 perform_action(action);
@@ -130,6 +132,12 @@ mod mac {
                     "evt": "tray_action", "action": "reveal",
                 }));
             }
+            Action::Pin => {
+                crate::pin::pin(&path);
+                crate::logging::event(serde_json::json!({
+                    "evt": "tray_action", "action": "pin",
+                }));
+            }
             Action::Discard => {
                 let _ = std::fs::remove_file(&path);
                 crate::logging::event(serde_json::json!({
@@ -140,7 +148,7 @@ mod mac {
         }
     }
 
-    const PANEL_W: f64 = 380.0;
+    const PANEL_W: f64 = 430.0;
     const PANEL_H: f64 = 110.0;
     const MARGIN: f64 = 24.0;
     const THUMB: f64 = 80.0;
@@ -252,11 +260,11 @@ mod mac {
         let handler: Retained<Handler> = unsafe { msg_send![Handler::alloc(), init] };
 
         // Button row.
-        let labels = ["Copy", "Folder", "Reveal", "Discard"];
-        let tags: [isize; 4] = [1, 2, 3, 4];
-        let btn_w = 64.0;
+        let labels = ["Copy", "Folder", "Reveal", "Pin", "Discard"];
+        let tags: [isize; 5] = [1, 2, 3, 4, 5];
+        let btn_w = 60.0;
         let btn_h = 28.0;
-        let gap = 6.0;
+        let gap = 4.0;
         let total = (btn_w * labels.len() as f64) + (gap * (labels.len() as f64 - 1.0));
         let start_x = PANEL_W - total - 14.0;
         let y = (PANEL_H - btn_h) / 2.0 - 12.0;
