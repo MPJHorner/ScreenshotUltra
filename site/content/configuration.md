@@ -36,6 +36,7 @@ copy_on_capture        = true
 play_shutter_sound     = true
 show_in_dock           = false
 quick_tray_timeout_ms  = 6000
+check_for_updates      = false         # opt-in: poll GitHub Releases (off by default)
 
 [capture]
 include_cursor         = false

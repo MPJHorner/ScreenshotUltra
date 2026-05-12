@@ -74,6 +74,12 @@ pub struct General {
     pub show_in_dock: bool,
     #[serde(default = "default_tray_timeout_ms")]
     pub quick_tray_timeout_ms: u64,
+    /// Opt-in: poll GitHub Releases for a newer version on startup
+    /// and every 24 hours. Off by default — Screenshot Ultra never
+    /// phones home unless the user enables this. The "Check for
+    /// Updates…" menu item works regardless of this setting.
+    #[serde(default)]
+    pub check_for_updates: bool,
 }
 
 fn default_tray_timeout_ms() -> u64 {
@@ -200,6 +206,7 @@ impl Default for General {
             play_shutter_sound: true,
             show_in_dock: false,
             quick_tray_timeout_ms: 6000,
+            check_for_updates: false,
         }
     }
 }

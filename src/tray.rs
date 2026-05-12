@@ -36,6 +36,7 @@ pub enum MenuAction {
     Preferences,
     Help,
     History,
+    CheckForUpdates,
     About,
     Quit,
 }
@@ -60,6 +61,7 @@ struct Ids {
     preferences: MenuId,
     help: MenuId,
     history: MenuId,
+    check_for_updates: MenuId,
     about: MenuId,
     quit: MenuId,
 }
@@ -86,6 +88,7 @@ pub fn build() -> Result<TrayIcon> {
     let preferences = MenuItem::new("Preferences…\t⌃⌥⌘,", true, None);
     let help = MenuItem::new("Cheat Sheet\t⌃⌥⌘/", true, None);
     let history = MenuItem::new("History…\t⌃⌥⌘H", true, None);
+    let check_for_updates = MenuItem::new("Check for Updates…", true, None);
     let reveal_settings = MenuItem::new("Edit settings.toml directly…", true, None);
     let reveal_log = MenuItem::new("Reveal Log File", true, None);
     let about = MenuItem::new("About Screenshot Ultra…", true, None);
@@ -111,6 +114,7 @@ pub fn build() -> Result<TrayIcon> {
         preferences: preferences.id().clone(),
         help: help.id().clone(),
         history: history.id().clone(),
+        check_for_updates: check_for_updates.id().clone(),
         about: about.id().clone(),
         quit: quit.id().clone(),
     };
@@ -138,6 +142,7 @@ pub fn build() -> Result<TrayIcon> {
     menu.append(&preferences).ok();
     menu.append(&help).ok();
     menu.append(&history).ok();
+    menu.append(&check_for_updates).ok();
     menu.append(&reveal_settings).ok();
     menu.append(&reveal_log).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
@@ -231,6 +236,8 @@ pub fn menu_action(id: &MenuId) -> Option<MenuAction> {
         Some(MenuAction::Help)
     } else if id == &ids.history {
         Some(MenuAction::History)
+    } else if id == &ids.check_for_updates {
+        Some(MenuAction::CheckForUpdates)
     } else if id == &ids.about {
         Some(MenuAction::About)
     } else if id == &ids.quit {

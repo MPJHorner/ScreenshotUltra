@@ -19,30 +19,45 @@ mod mac {
     use std::cell::RefCell;
     use std::path::Path;
 
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
     use objc2::rc::Retained;
+    use objc2::runtime::{AnyObject, ProtocolObject};
     use objc2::{define_class, msg_send, AllocAnyThread, MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
-        NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSEvent,
-        NSFloatingWindowLevel, NSImage, NSImageScaling, NSImageView, NSView, NSWindow,
+        NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSDragOperation,
+        NSDraggingContext, NSDraggingItem, NSDraggingSession, NSEvent, NSFloatingWindowLevel,
+        NSImage, NSImageScaling, NSImageView, NSPasteboardItem, NSPasteboardTypeFileURL, NSWindow,
         NSWindowStyleMask,
     };
-    use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSURL};
+    use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString, NSURL};
 
     // Keep pin windows alive so they don't drop and close immediately.
     thread_local! {
         static PINS: RefCell<Vec<Retained<NSWindow>>> = const { RefCell::new(Vec::new()) };
+
+        // Maps a pin view's stable pointer to the file path it shows. Lets a
+        // single class definition serve multiple simultaneous pins, each
+        // dragging out its own file. Entries are removed when the pin is
+        // closed.
+        static PIN_PATHS: RefCell<HashMap<usize, PathBuf>> =
+            RefCell::new(HashMap::new());
+
+        static PIN_DRAG_STARTED: RefCell<bool> = const { RefCell::new(false) };
     }
 
     define_class!(
-        /// Receives mouse + key events for a pin window. Overrides
-        /// `scrollWheel:` (vertical scroll changes alpha) and `keyDown:`
-        /// (⌫ / Esc close, ⌘+ / ⌘- zoom).
-        #[unsafe(super(NSView))]
-        #[name = "STUPinControl"]
+        /// All-in-one pin view: shows the screenshot, accepts scroll-to-dim,
+        /// keyboard zoom + close, *and* serves as the drag source for the
+        /// file. Subclassing NSImageView means the user sees the image
+        /// underneath their cursor as they drag.
+        #[unsafe(super(NSImageView))]
+        #[name = "STUDraggablePin"]
         #[derive(Debug)]
-        struct PinControl;
+        struct DraggablePin;
 
-        impl PinControl {
+        impl DraggablePin {
             #[unsafe(method(acceptsFirstResponder))]
             fn accepts_first_responder(&self) -> bool {
                 true
@@ -53,7 +68,6 @@ mod mac {
                 let dy = unsafe { event.deltaY() };
                 if let Some(win) = unsafe { self.window() } {
                     let cur = unsafe { win.alphaValue() };
-                    // 1.0 = opaque, 0.3 = barely visible. Step ~5% per click.
                     let next = (cur + (dy * 0.04)).clamp(0.3, 1.0);
                     unsafe { win.setAlphaValue(next) };
                 }
@@ -67,10 +81,8 @@ mod mac {
                 let cmd = mods.contains(objc2_app_kit::NSEventModifierFlags::Command);
                 let Some(win) = (unsafe { self.window() }) else { return };
                 match s.as_str() {
-                    // Backspace / Delete-forward: close the pin.
                     "\u{8}" | "\u{7f}" | "\u{1b}" => {
-                        let _ = win;
-                        close_pin(&self.window().unwrap());
+                        close_pin(self, &win);
                     }
                     "=" | "+" if cmd => zoom(&win, 1.10),
                     "-" if cmd => zoom(&win, 1.0 / 1.10),
@@ -78,19 +90,81 @@ mod mac {
                     _ => {}
                 }
             }
+
+            #[unsafe(method(mouseDown:))]
+            fn mouse_down(&self, _event: &NSEvent) {
+                PIN_DRAG_STARTED.with(|s| *s.borrow_mut() = true);
+            }
+
+            #[unsafe(method(mouseDragged:))]
+            fn mouse_dragged(&self, event: &NSEvent) {
+                let started = PIN_DRAG_STARTED.with(|s| *s.borrow());
+                if !started {
+                    return;
+                }
+                PIN_DRAG_STARTED.with(|s| *s.borrow_mut() = false);
+                let key = self as *const Self as usize;
+                let path = PIN_PATHS.with(|m| m.borrow().get(&key).cloned());
+                let Some(path) = path else { return };
+                begin_drag(self, event, &path);
+            }
+
+            /// Required NSDraggingSource method.
+            #[unsafe(method(draggingSession:sourceOperationMaskForDraggingContext:))]
+            fn dragging_session_source_operation_mask_for_dragging_context(
+                &self,
+                _session: &NSDraggingSession,
+                _context: NSDraggingContext,
+            ) -> NSDragOperation {
+                NSDragOperation::Copy
+            }
         }
     );
 
-    fn close_pin(win: &NSWindow) {
+    fn begin_drag(view: &DraggablePin, event: &NSEvent, path: &std::path::Path) {
+        unsafe {
+            let pb_item: Retained<NSPasteboardItem> = msg_send![NSPasteboardItem::alloc(), init];
+            let abs = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+            let url_str = NSString::from_str(&format!("file://{}", abs.display()));
+            pb_item.setString_forType(&url_str, NSPasteboardTypeFileURL);
+
+            let writer: &ProtocolObject<dyn objc2_app_kit::NSPasteboardWriting> =
+                ProtocolObject::from_ref(&*pb_item);
+            let drag_item: Retained<NSDraggingItem> =
+                NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), writer);
+            let bounds = view.bounds();
+            let contents: Option<Retained<NSImage>> = msg_send![view, image];
+            drag_item
+                .setDraggingFrame_contents(bounds, contents.as_deref().map(|i| i as &AnyObject));
+
+            let items: Retained<NSArray<NSDraggingItem>> =
+                NSArray::from_retained_slice(&[drag_item]);
+            let _session: Retained<NSDraggingSession> = msg_send![
+                view,
+                beginDraggingSessionWithItems: &*items,
+                event: event,
+                source: view as &AnyObject,
+            ];
+            crate::logging::event(serde_json::json!({
+                "evt": "pin_action",
+                "action": "drag_out",
+                "path": path.display().to_string(),
+            }));
+        }
+    }
+
+    fn close_pin(view: &DraggablePin, win: &NSWindow) {
         unsafe {
             win.orderOut(None);
             win.close();
         }
+        let view_key = view as *const DraggablePin as usize;
+        PIN_PATHS.with(|m| {
+            m.borrow_mut().remove(&view_key);
+        });
         PINS.with(|v| {
-            v.borrow_mut().retain(|w| {
-                // NSObject pointer identity is fine for our purposes.
-                !std::ptr::eq(&**w as *const NSWindow, win as *const NSWindow)
-            })
+            v.borrow_mut()
+                .retain(|w| !std::ptr::eq(&**w as *const NSWindow, win as *const NSWindow))
         });
     }
 
@@ -192,8 +266,11 @@ mod mac {
                     height: h,
                 },
             };
-            let image_view = unsafe {
-                let v = NSImageView::initWithFrame(NSImageView::alloc(mtm), view_rect);
+            // One view handles image display, drag-out, scroll dim, and
+            // keyboard zoom/close — simpler than a stack of overlays.
+            let pin_view: Retained<DraggablePin> = unsafe {
+                let v: Retained<DraggablePin> =
+                    msg_send![DraggablePin::alloc(mtm), initWithFrame: view_rect];
                 v.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
                 v.setImage(Some(&img));
                 v.setAutoresizingMask(
@@ -202,21 +279,13 @@ mod mac {
                 );
                 v
             };
-            unsafe { content_view.addSubview(&image_view) };
-
-            // Overlay an invisible PinControl to intercept scroll / keyDown.
-            // It sits *above* the image view and accepts first responder.
-            let control: Retained<PinControl> = unsafe {
-                let alloc = PinControl::alloc(mtm);
-                msg_send![alloc, initWithFrame: view_rect]
-            };
+            let view_key = &*pin_view as *const DraggablePin as usize;
+            PIN_PATHS.with(|m| {
+                m.borrow_mut().insert(view_key, image_path.to_path_buf());
+            });
             unsafe {
-                control.setAutoresizingMask(
-                    objc2_app_kit::NSAutoresizingMaskOptions::ViewWidthSizable
-                        | objc2_app_kit::NSAutoresizingMaskOptions::ViewHeightSizable,
-                );
-                content_view.addSubview(&control);
-                window.makeFirstResponder(Some(&control));
+                content_view.addSubview(&pin_view);
+                window.makeFirstResponder(Some(&pin_view));
             }
         }
 

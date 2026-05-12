@@ -21,6 +21,7 @@ mod recording;
 mod settings;
 mod sinks;
 mod tray;
+mod updater;
 mod welcome;
 
 use anyhow::{Context, Result};
@@ -88,6 +89,11 @@ fn main() -> Result<()> {
 
     // Show the welcome window on first launch.
     welcome::show_if_first_run(&settings);
+
+    // Opt-in background update check (off by default — see plan.md §11).
+    if settings.general.check_for_updates {
+        updater::spawn_background_scheduler();
+    }
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -161,6 +167,7 @@ fn main() -> Result<()> {
                     Some(tray::MenuAction::Preferences) => preferences::show(),
                     Some(tray::MenuAction::Help) => help::show(&settings),
                     Some(tray::MenuAction::History) => history::show(&settings),
+                    Some(tray::MenuAction::CheckForUpdates) => updater::check_now(true),
                     Some(tray::MenuAction::Quit) => *control_flow = ControlFlow::Exit,
                     None => {}
                 },

@@ -5,6 +5,42 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-05-12
+
+### Changed — M6 (sign/notarise) parked
+- M6 (signed `.dmg` + notarisation + Homebrew cask) is parked until a
+  Developer ID Application certificate is available to test against.
+  Until then the existing tag-driven pipeline continues to ship
+  unsigned universal `.zip`s. plan.md, milestone README, and
+  `docs/milestones/M6-ship.md` all flagged 🔒 parked.
+
+### Added — opt-in update check
+- New setting **`[general].check_for_updates = false`** (off by default
+  per plan §11 "no telemetry / no phone-home unless the user opts in").
+  When on: at startup (after a 30 s settling delay) and every 24 hours
+  we poll the GitHub Releases API for a newer `tag_name`. If one
+  exists, fire a notification banner and emit an `update_available`
+  NDJSON event.
+- **Tray menu** gains a `Check for Updates…` entry that runs the
+  check on demand regardless of the setting and notifies whether
+  you're up to date. Useful even with the auto-poll off.
+- Uses `/usr/bin/curl` rather than pulling in `reqwest` for a single
+  GET — keeps the binary small.
+- 7 new unit tests for the SemVer-ish comparator.
+- We never auto-install (signing pipeline isn't in place; see M6
+  parked status).
+
+### Added — drag-out from Pin windows
+- The Pin window's image is now a drag source too. Drag a pinned
+  screenshot into Slack / Mail / Finder / any drop target that
+  accepts a file URL and the file lands there.
+- The `STUPinControl` overlay view was folded back into the image
+  view itself (new `STUDraggablePin`, NSImageView subclass) so one
+  class handles drawing, scroll-dim, keyboard zoom + close, *and*
+  drag-out. Multi-pin support via a `PIN_PATHS: HashMap<view_ptr,
+  PathBuf>` keyed by stable view pointer.
+- New NDJSON event: `pin_action.action = "drag_out"`.
+
 ## [0.8.3] — 2026-05-12
 
 ### Added — first-run welcome window
