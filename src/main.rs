@@ -10,6 +10,7 @@ mod eyedropper;
 mod help;
 mod hotkeys;
 mod logging;
+mod ocr;
 mod pin;
 mod preferences;
 mod quick_tray;

@@ -1,6 +1,6 @@
 [package]
 name = "screenshot-ultra"
-version = "0.6.2"
+version = "0.7.0"
 edition = "2021"
 rust-version = "1.75"
 description = "A snappy, hotkey-first macOS screenshot and screen recorder. Local-first. No cloud."
@@ -35,6 +35,7 @@ objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSGeomet
 objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSPanel", "NSResponder", "NSView", "NSButton", "NSControl", "NSImage", "NSImageView", "NSScreen", "NSColor", "NSGraphics", "NSApplication", "NSCell", "NSText", "NSEvent", "NSBitmapImageRep", "NSImageRep", "NSGraphicsContext", "NSBezierPath", "NSPasteboard", "NSPasteboardItem", "NSFont", "NSStringDrawing", "NSAttributedString", "NSAlert", "NSTextField", "NSColorSampler", "NSTextView", "NSScrollView", "NSLayoutManager", "NSTextStorage", "NSTextContainer"] }
 objc2-quartz-core = { version = "0.3", features = ["CALayer", "objc2-core-foundation"] }
 objc2-core-graphics = { version = "0.3", features = ["CGColor"] }
+objc2-vision = { version = "0.3", features = ["VNRequest", "VNRequestHandler", "VNRecognizeTextRequest", "VNObservation", "VNTypes"] }
 
 [profile.release]
 opt-level = 3

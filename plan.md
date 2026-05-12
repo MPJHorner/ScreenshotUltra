@@ -13,7 +13,7 @@ This document is the design. Delivery is tracked per milestone in
 | [M2](docs/milestones/M2-annotate.md)             | Annotate            | ✅ complete in v0.5.0 (11-tool editor, Pin opacity/zoom, eyedropper, Quick Tray, hot-reload, sinks, Preferences GUI, docs site) |
 | [M3](docs/milestones/M3-record.md)               | Record              | 🚧 v0.6.0 ships v0 (start/stop video + GIF, click highlight, microphone) |
 | [M4](docs/milestones/M4-scroll-and-beautify.md)  | Scroll & Beautify   | ⏳ planned            |
-| [M5](docs/milestones/M5-ocr-and-polish.md)       | OCR & polish        | ⏳ planned            |
+| [M5](docs/milestones/M5-ocr-and-polish.md)       | OCR & polish        | 🚧 v0.7.0 ships v0 OCR (Quick Tray "Text" copies recognised text via Apple Vision) |
 | [M6](docs/milestones/M6-ship.md)                 | Ship v1.0           | ⏳ planned            |
 
 §13 below holds the original milestone breakdown verbatim; the

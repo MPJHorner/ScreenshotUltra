@@ -32,6 +32,7 @@ mod mac {
         RevealInFinder,
         Pin,
         Discard,
+        Text,
     }
 
     struct TrayState {
@@ -77,6 +78,7 @@ mod mac {
                     4 => Action::RevealInFinder,
                     5 => Action::Pin,
                     6 => Action::Discard,
+                    7 => Action::Text,
                     _ => return,
                 };
                 perform_action(action);
@@ -146,6 +148,43 @@ mod mac {
                     "evt": "tray_action", "action": "pin",
                 }));
             }
+            Action::Text => {
+                let text = crate::ocr::extract_text(&path);
+                match text {
+                    Some(t) => {
+                        // Copy OCR'd text to clipboard so it's
+                        // pasteable anywhere immediately.
+                        let _ = std::process::Command::new("/bin/sh")
+                            .arg("-c")
+                            .arg("/usr/bin/pbcopy")
+                            .stdin(std::process::Stdio::piped())
+                            .spawn()
+                            .and_then(|mut child| {
+                                use std::io::Write;
+                                if let Some(stdin) = child.stdin.as_mut() {
+                                    let _ = stdin.write_all(t.as_bytes());
+                                }
+                                child.wait()
+                            });
+                        let chars = t.chars().count();
+                        crate::logging::event(serde_json::json!({
+                            "evt": "ocr",
+                            "path": path.display().to_string(),
+                            "chars": chars,
+                        }));
+                        crate::sinks::notify(
+                            "Screenshot Ultra — text copied",
+                            &format!("{chars} characters on clipboard"),
+                        );
+                    }
+                    None => {
+                        crate::sinks::notify(
+                            "Screenshot Ultra — no text",
+                            "Vision didn't find any text in this capture.",
+                        );
+                    }
+                }
+            }
             Action::Discard => {
                 let _ = std::fs::remove_file(&path);
                 crate::logging::event(serde_json::json!({
@@ -156,7 +195,7 @@ mod mac {
         }
     }
 
-    const PANEL_W: f64 = 480.0;
+    const PANEL_W: f64 = 540.0;
     const PANEL_H: f64 = 110.0;
     const MARGIN: f64 = 24.0;
     const THUMB: f64 = 80.0;
@@ -268,8 +307,8 @@ mod mac {
         let handler: Retained<Handler> = unsafe { msg_send![Handler::alloc(), init] };
 
         // Button row.
-        let labels = ["Copy", "Edit", "Folder", "Reveal", "Pin", "Discard"];
-        let tags: [isize; 6] = [1, 2, 3, 4, 5, 6];
+        let labels = ["Copy", "Text", "Edit", "Folder", "Reveal", "Pin", "Discard"];
+        let tags: [isize; 7] = [1, 7, 2, 3, 4, 5, 6];
         let btn_w = 56.0;
         let btn_h = 28.0;
         let gap = 4.0;
