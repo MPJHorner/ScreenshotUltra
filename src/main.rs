@@ -21,6 +21,7 @@ mod recording;
 mod settings;
 mod sinks;
 mod tray;
+mod welcome;
 
 use anyhow::{Context, Result};
 use global_hotkey::GlobalHotKeyEvent;
@@ -84,6 +85,9 @@ fn main() -> Result<()> {
     // the reload so we don't have to wrestle with thread-safety inside
     // hotkeys::register_all (which holds OS-level handles).
     spawn_settings_watcher(event_loop.create_proxy());
+
+    // Show the welcome window on first launch.
+    welcome::show_if_first_run(&settings);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;

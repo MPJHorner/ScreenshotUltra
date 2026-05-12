@@ -5,6 +5,27 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] — 2026-05-12
+
+### Added — first-run welcome window
+- On first launch the app opens a styled `NSWindow` walking the user
+  through the three things they need to know: (1) the Screen Recording
+  permission, (2) the default hotkeys, (3) the menu bar icon.
+- Two deep-link buttons jump straight to the relevant System Settings
+  panes:
+  - **Grant Screen Recording…** →
+    `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`
+  - **Grant Accessibility (optional)…** →
+    `x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility`
+  (The Accessibility one is only needed for the keystroke overlay.)
+- Hotkey summary inside the welcome window is pulled from the **live**
+  `Settings`, so rebound bindings show up if the user has imported a
+  config from another machine.
+- Gated by a versioned marker file at
+  `~/Library/Application Support/ScreenshotUltra/.welcomed-v1` — users
+  upgrading from an earlier version don't get re-welcomed.
+- New NDJSON event: `welcomed`.
+
 ## [0.8.2] — 2026-05-12
 
 ### Added — drag-out from the Quick Tray
