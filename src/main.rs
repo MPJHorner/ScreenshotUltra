@@ -12,6 +12,7 @@ mod logging;
 mod pin;
 mod preferences;
 mod quick_tray;
+mod recording;
 mod settings;
 mod sinks;
 mod tray;
@@ -123,6 +124,12 @@ fn main() -> Result<()> {
                     Some(tray::MenuAction::Timed3s) => run_timed(3, &settings),
                     Some(tray::MenuAction::Timed5s) => run_timed(5, &settings),
                     Some(tray::MenuAction::Timed10s) => run_timed(10, &settings),
+                    Some(tray::MenuAction::RecordVideo) => {
+                        handle_action(hotkeys::Action::RecordVideo, &settings)
+                    }
+                    Some(tray::MenuAction::RecordGif) => {
+                        handle_action(hotkeys::Action::RecordGif, &settings)
+                    }
                     Some(tray::MenuAction::About) => about::show(),
                     Some(tray::MenuAction::OpenFolder) => {
                         let _ = std::process::Command::new("open")
@@ -298,6 +305,18 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
             preferences::show();
             return;
         }
+        hotkeys::Action::RecordVideo => {
+            if let Err(err) = recording::toggle(recording::RecordingKind::Video, settings) {
+                eprintln!("record_video: {err:#}");
+            }
+            return;
+        }
+        hotkeys::Action::RecordGif => {
+            if let Err(err) = recording::toggle(recording::RecordingKind::Gif, settings) {
+                eprintln!("record_gif: {err:#}");
+            }
+            return;
+        }
         _ => {}
     }
 
@@ -309,7 +328,9 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
         | hotkeys::Action::RepeatLast
         | hotkeys::Action::OpenClipboardImage
         | hotkeys::Action::ColorPicker
-        | hotkeys::Action::Preferences => unreachable!(),
+        | hotkeys::Action::Preferences
+        | hotkeys::Action::RecordVideo
+        | hotkeys::Action::RecordGif => unreachable!(),
     };
     run_capture(mode, action.show_tray(), settings);
 }

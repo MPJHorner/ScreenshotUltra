@@ -1,22 +1,32 @@
 # M3 — Record
 
-**Status:** ⏳ planned
+**Status:** 🚧 in progress (v0.6.0 ships v0)
 
 **Goal:** Screen recording (video + GIF) with the same hotkey-first ergonomics
 as still capture.
 
 ## Scope (from plan.md §13)
 
-- [ ] Video recording via ScreenCaptureKit → AVAssetWriter (H.264 / HEVC, mp4/mov).
-- [ ] 30 / 60 fps configurable.
-- [ ] System audio capture (ScreenCaptureKit, no extension on macOS 13+).
-- [ ] Microphone capture with input device picker + live level meter.
-- [ ] Mouse highlight ring + click flash, toggleable.
+- [~] Video recording — **v0 shipped via `screencapture -v` + SIGINT**
+      (writes `.mov`). Native ScreenCaptureKit → AVAssetWriter pipeline
+      replaces it in a follow-up.
+- [ ] 30 / 60 fps configurable. *(screencapture -v doesn't expose this;
+      ScreenCaptureKit backend will.)*
+- [ ] System audio capture. *(macOS-26 ScreenCaptureKit supports it
+      natively; will land with the SCK backend.)*
+- [~] Microphone capture — `[recording].record_microphone = true`
+      passes `-g` to `screencapture`. Device-picker UI deferred.
+- [x] **Mouse-click highlight** — `[recording].show_clicks = true`
+      (default) passes `-k` to `screencapture`.
 - [ ] Keystroke overlay, toggleable, with allow/deny list per app.
-- [ ] GIF recording via `gifski` (same UX as video, output is `.gif`).
-- [ ] Post-stop trim UI: drag handles on a timeline, no re-encode on keyframe cuts.
-- [ ] Native ScreenCaptureKit backend replaces the `screencapture` shell-out
-      for still capture too — single pipeline for stills + video.
+- [x] **GIF recording** — capture as `.mov` then post-process via
+      `ffmpeg` (palette + paletteuse for high-quality small GIFs). If
+      `ffmpeg` isn't on PATH we keep the `.mov` and log it. A future
+      pass will swap in `gifski` for bundled, no-dependency GIFs.
+- [ ] Post-stop trim UI: drag handles on a timeline.
+- [ ] Native ScreenCaptureKit backend replaces the `screencapture`
+      shell-out for still capture too — single pipeline for stills +
+      video.
 
 ## Risks
 

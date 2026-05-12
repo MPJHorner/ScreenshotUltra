@@ -303,7 +303,7 @@ pub fn run(mode: CaptureMode, show_tray: bool, settings: &Settings) -> Result<()
 /// Append a JSON line describing this capture to `<folder>/.screenshot-ultra/index.ndjson`.
 /// Best-effort: errors are swallowed (we don't want to fail a successful capture
 /// just because the index file couldn't be written).
-fn write_history_index(folder: &std::path::Path, event: &serde_json::Value) {
+pub fn write_history_index(folder: &std::path::Path, event: &serde_json::Value) {
     use std::io::Write;
     let dir = folder.join(".screenshot-ultra");
     if std::fs::create_dir_all(&dir).is_err() {
@@ -321,6 +321,37 @@ fn write_history_index(folder: &std::path::Path, event: &serde_json::Value) {
     {
         let _ = writeln!(file, "{line}");
     }
+}
+
+/// Render a path for a recording, using "video" / "gif" as the mode token
+/// and the appropriate file extension. Recordings always start life as .mov
+/// (screencapture -v output) — GIFs are renamed after post-processing.
+pub fn render_path_for_recording(
+    folder: &std::path::Path,
+    kind: crate::recording::RecordingKind,
+    template: &str,
+) -> PathBuf {
+    // The frame grabber needs a .mov regardless of the final target;
+    // recording::stop renames to .gif if transcoding succeeds.
+    render_path_with_mode_string(folder, kind.as_str(), template, "mov")
+}
+
+fn render_path_with_mode_string(
+    folder: &std::path::Path,
+    mode_str: &str,
+    template: &str,
+    fmt: &str,
+) -> PathBuf {
+    let now = Local::now();
+    let date = now.format("%Y%m%d").to_string();
+    let time = now.format("%H%M%S").to_string();
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let name = template
+        .replace("{date}", &date)
+        .replace("{time}", &time)
+        .replace("{mode}", mode_str)
+        .replace("{seq}", &format!("{seq:03}"));
+    folder.join(format!("{name}.{fmt}"))
 }
 
 fn render_path(folder: &std::path::Path, mode: CaptureMode, template: &str, fmt: &str) -> PathBuf {

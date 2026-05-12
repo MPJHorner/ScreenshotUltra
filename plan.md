@@ -11,7 +11,7 @@ This document is the design. Delivery is tracked per milestone in
 |-----------|--------------------|-----------------------|
 | [M1](docs/milestones/M1-press-the-key.md)        | Press the key       | ✅ shipped (v0.1.0)   |
 | [M2](docs/milestones/M2-annotate.md)             | Annotate            | ✅ complete in v0.5.0 (11-tool editor, Pin opacity/zoom, eyedropper, Quick Tray, hot-reload, sinks, Preferences GUI, docs site) |
-| [M3](docs/milestones/M3-record.md)               | Record              | ⏳ planned            |
+| [M3](docs/milestones/M3-record.md)               | Record              | 🚧 v0.6.0 ships v0 (start/stop video + GIF, click highlight, microphone) |
 | [M4](docs/milestones/M4-scroll-and-beautify.md)  | Scroll & Beautify   | ⏳ planned            |
 | [M5](docs/milestones/M5-ocr-and-polish.md)       | OCR & polish        | ⏳ planned            |
 | [M6](docs/milestones/M6-ship.md)                 | Ship v1.0           | ⏳ planned            |

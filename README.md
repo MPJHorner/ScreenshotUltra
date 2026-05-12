@@ -68,6 +68,8 @@ Every binding is rebindable in `~/Library/Application Support/ScreenshotUltra/se
 | Pin last to screen           | `⌃⌥⌘.`  | Floating always-on-top window               |
 | Colour picker (eyedropper)   | `⌃⌥⌘P`  | Copies the picked `#rrggbb` to clipboard    |
 | Preferences                  | `⌃⌥⌘,`  | In-app `settings.toml` editor               |
+| Record video (toggle)        | `⌃⌥⌘V`  | Start/stop a screen recording (`.mov`)      |
+| Record GIF (toggle)          | `⌃⌥⌘G`  | Same flow, post-processed to `.gif` via `ffmpeg` |
 | Silent variants              | _unset_ | Set `silent_*` in `settings.toml` to enable |
 
 All bindings live under `[hotkeys]` in `settings.toml`. Full syntax reference on the [hotkeys docs page](https://mpjhorner.github.io/ScreenshotUltra/hotkeys/).

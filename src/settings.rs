@@ -12,9 +12,31 @@ pub struct Settings {
     #[serde(default)]
     pub capture: CaptureOptions,
     #[serde(default)]
+    pub recording: RecordingOptions,
+    #[serde(default)]
     pub hotkeys: Hotkeys,
     #[serde(default)]
     pub sinks: Sinks,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RecordingOptions {
+    /// Highlight mouse clicks in the video output (passes `-k` to
+    /// screencapture).
+    pub show_clicks: bool,
+    /// Capture audio from the default input device (passes `-g` to
+    /// screencapture). System audio capture requires a separate
+    /// virtual audio device on macOS; not exposed yet.
+    pub record_microphone: bool,
+}
+
+impl Default for RecordingOptions {
+    fn default() -> Self {
+        Self {
+            show_clicks: true,
+            record_microphone: false,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -83,6 +105,12 @@ fn default_color_picker() -> String {
 fn default_preferences() -> String {
     "ctrl+alt+cmd+comma".into()
 }
+fn default_record_video() -> String {
+    "ctrl+alt+cmd+v".into()
+}
+fn default_record_gif() -> String {
+    "ctrl+alt+cmd+g".into()
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Hotkeys {
@@ -121,6 +149,12 @@ pub struct Hotkeys {
     /// Open the Preferences window. Empty = unbound.
     #[serde(default = "default_preferences")]
     pub preferences: String,
+    /// Toggle video recording on/off. Empty = unbound.
+    #[serde(default = "default_record_video")]
+    pub record_video: String,
+    /// Toggle GIF recording on/off. Empty = unbound.
+    #[serde(default = "default_record_gif")]
+    pub record_gif: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -167,6 +201,8 @@ impl Default for Hotkeys {
             open_clipboard_image: "ctrl+alt+cmd+e".into(),
             color_picker: "ctrl+alt+cmd+p".into(),
             preferences: "ctrl+alt+cmd+comma".into(),
+            record_video: "ctrl+alt+cmd+v".into(),
+            record_gif: "ctrl+alt+cmd+g".into(),
         }
     }
 }

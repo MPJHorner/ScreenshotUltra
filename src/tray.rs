@@ -19,6 +19,8 @@ pub enum MenuAction {
     Timed3s,
     Timed5s,
     Timed10s,
+    RecordVideo,
+    RecordGif,
     OpenFolder,
     RevealSettings,
     RevealLog,
@@ -39,6 +41,8 @@ struct Ids {
     timed_3s: MenuId,
     timed_5s: MenuId,
     timed_10s: MenuId,
+    record_video: MenuId,
+    record_gif: MenuId,
     open_folder: MenuId,
     reveal_settings: MenuId,
     reveal_log: MenuId,
@@ -62,6 +66,9 @@ pub fn build() -> Result<TrayIcon> {
     let timed_3s = MenuItem::new("Fullscreen in 3 s", true, None);
     let timed_5s = MenuItem::new("Fullscreen in 5 s", true, None);
     let timed_10s = MenuItem::new("Fullscreen in 10 s", true, None);
+    // Recording — wording flips at runtime if a recording is in progress.
+    let record_video = MenuItem::new(record_video_label(), true, None);
+    let record_gif = MenuItem::new(record_gif_label(), true, None);
     let open_folder = MenuItem::new("Open Save Folder", true, None);
     let preferences = MenuItem::new("Preferences…\t⌃⌥⌘,", true, None);
     let reveal_settings = MenuItem::new("Edit settings.toml directly…", true, None);
@@ -81,6 +88,8 @@ pub fn build() -> Result<TrayIcon> {
         timed_3s: timed_3s.id().clone(),
         timed_5s: timed_5s.id().clone(),
         timed_10s: timed_10s.id().clone(),
+        record_video: record_video.id().clone(),
+        record_gif: record_gif.id().clone(),
         open_folder: open_folder.id().clone(),
         reveal_settings: reveal_settings.id().clone(),
         reveal_log: reveal_log.id().clone(),
@@ -104,6 +113,9 @@ pub fn build() -> Result<TrayIcon> {
     menu.append(&timed_3s).ok();
     menu.append(&timed_5s).ok();
     menu.append(&timed_10s).ok();
+    menu.append(&PredefinedMenuItem::separator()).ok();
+    menu.append(&record_video).ok();
+    menu.append(&record_gif).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
     menu.append(&open_folder).ok();
     menu.append(&preferences).ok();
@@ -150,6 +162,10 @@ pub fn menu_action(id: &MenuId) -> Option<MenuAction> {
         Some(MenuAction::Timed5s)
     } else if id == &ids.timed_10s {
         Some(MenuAction::Timed10s)
+    } else if id == &ids.record_video {
+        Some(MenuAction::RecordVideo)
+    } else if id == &ids.record_gif {
+        Some(MenuAction::RecordGif)
     } else if id == &ids.open_folder {
         Some(MenuAction::OpenFolder)
     } else if id == &ids.reveal_settings {
@@ -165,6 +181,19 @@ pub fn menu_action(id: &MenuId) -> Option<MenuAction> {
     } else {
         None
     }
+}
+
+/// Label text for the "Record Video" menu item. Currently static; a future
+/// pass can swap the text live when a recording is in progress so the
+/// menu reads "Stop Recording" mid-take. (Requires retaining the
+/// `MenuItem` and calling `set_text` on it — the tray-icon crate
+/// supports this.)
+fn record_video_label() -> &'static str {
+    "Record Video / Stop\t⌃⌥⌘V"
+}
+
+fn record_gif_label() -> &'static str {
+    "Record GIF / Stop\t⌃⌥⌘G"
 }
 
 /// 22×22 monochrome aperture glyph (matches the .app icon's iris).

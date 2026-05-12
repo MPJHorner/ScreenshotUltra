@@ -5,6 +5,39 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-05-12
+
+The **M3 begins** release. Video + GIF recording lands, plus a third row
+in the tray menu and two new global hotkeys.
+
+### Added — M3 v0 recording
+- **Toggle video recording** (default `⌃⌥⌘V`) — press to start, press
+  again to stop. Saves as `<save_folder>/...mov` with the same
+  `filename_template` as still captures. Mode token = `video`.
+- **Toggle GIF recording** (default `⌃⌥⌘G`) — captures as `.mov`, then
+  post-processes through `ffmpeg` (12 fps + generated palette for crisp
+  small files) into a `.gif`. Without `ffmpeg`, falls back to keeping
+  the `.mov` with a log line.
+- **Mouse-click highlight** in recordings via `screencapture -k` —
+  enable / disable via `[recording].show_clicks` (default on).
+- **Microphone capture** via `screencapture -g` —
+  `[recording].record_microphone` (default off).
+- Tray menu adds **Record Video / Stop** and **Record GIF / Stop**
+  items. Quick Tray fires for the resulting file once recording stops.
+- New NDJSON events: `recording_start`, `recording_stop`.
+- New module `src/recording.rs` (~270 LOC). The `start()` / `stop()` /
+  `toggle()` boundary is stable so the planned ScreenCaptureKit +
+  AVAssetWriter swap-in is contained.
+
+### Notes
+- M3 v0 piggybacks on macOS's `screencapture -v` binary so we can ship
+  start/stop video recording today. A native ScreenCaptureKit pipeline
+  lands in v0.7 alongside system-audio capture and the keystroke
+  overlay (which `screencapture` can't do).
+- The full-screen Quick Tray "Edit" button still routes through the
+  annotation editor for stills only; videos open in the user's default
+  player.
+
 ## [0.5.0] — 2026-05-11
 
 The **M2 complete** release. The Preferences GUI lands, finishing the
