@@ -3,9 +3,18 @@
 // a proper template-image .icns later.
 
 use anyhow::{Context, Result};
+use std::cell::RefCell;
 use std::sync::OnceLock;
 use tray_icon::menu::{Menu, MenuId, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+
+// Cached idle + recording icons so set_recording_indicator() doesn't
+// rebuild them on every toggle.
+thread_local! {
+    static TRAY: RefCell<Option<TrayIcon>> = const { RefCell::new(None) };
+    static ICON_IDLE: RefCell<Option<Icon>> = const { RefCell::new(None) };
+    static ICON_RECORDING: RefCell<Option<Icon>> = const { RefCell::new(None) };
+}
 
 pub enum MenuAction {
     Region,
@@ -125,17 +134,51 @@ pub fn build() -> Result<TrayIcon> {
     menu.append(&about).ok();
     menu.append(&quit).ok();
 
-    let icon = make_icon();
+    // Cache both icons up front; swap via set_recording_indicator(bool).
+    let idle = make_icon();
+    let recording = make_recording_icon();
+    ICON_IDLE.with(|c| *c.borrow_mut() = Some(idle.clone()));
+    ICON_RECORDING.with(|c| *c.borrow_mut() = Some(recording));
 
     let tray = TrayIconBuilder::new()
         .with_tooltip("Screenshot Ultra")
         .with_menu(Box::new(menu))
-        .with_icon(icon)
+        .with_icon(idle)
         .with_icon_as_template(true)
         .build()
         .context("building tray icon")?;
 
     Ok(tray)
+}
+
+/// Hand the constructed TrayIcon to this module so we can swap its
+/// icon later via set_recording_indicator. Call once, right after
+/// `build()`, before the event loop starts.
+pub fn register(tray: TrayIcon) {
+    TRAY.with(|t| *t.borrow_mut() = Some(tray));
+}
+
+/// Flip the menu-bar icon between the idle aperture and the filled
+/// "REC" dot. The icons are cached so each call is O(1).
+pub fn set_recording_indicator(on: bool) {
+    TRAY.with(|t| {
+        if let Some(tray) = t.borrow().as_ref() {
+            let icon = if on {
+                ICON_RECORDING.with(|c| c.borrow().clone())
+            } else {
+                ICON_IDLE.with(|c| c.borrow().clone())
+            };
+            if let Some(icon) = icon {
+                let _ = tray.set_icon(Some(icon));
+            }
+            let tooltip = if on {
+                "Screenshot Ultra — recording"
+            } else {
+                "Screenshot Ultra"
+            };
+            let _ = tray.set_tooltip(Some(tooltip));
+        }
+    });
 }
 
 pub fn menu_action(id: &MenuId) -> Option<MenuAction> {
@@ -194,6 +237,38 @@ fn record_video_label() -> &'static str {
 
 fn record_gif_label() -> &'static str {
     "Record GIF / Stop\t⌃⌥⌘G"
+}
+
+/// 22×22 solid filled disc — the "recording" state. macOS tints
+/// template images, but the dot still reads as filled + obviously
+/// different from the open-iris idle state.
+fn make_recording_icon() -> Icon {
+    const SIZE: u32 = 22;
+    let mut rgba = vec![0u8; (SIZE * SIZE * 4) as usize];
+    let center = (SIZE as f32 - 1.0) / 2.0;
+    let r = 7.5_f32;
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let i = ((y * SIZE + x) * 4) as usize;
+            let dx = x as f32 - center;
+            let dy = y as f32 - center;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist > r {
+                continue;
+            }
+            // Soft edge.
+            let alpha = if dist > r - 0.6 {
+                (((r - dist) / 0.6).clamp(0.0, 1.0) * 255.0) as u8
+            } else {
+                255
+            };
+            rgba[i] = 0;
+            rgba[i + 1] = 0;
+            rgba[i + 2] = 0;
+            rgba[i + 3] = alpha;
+        }
+    }
+    Icon::from_rgba(rgba, SIZE, SIZE).expect("valid icon")
 }
 
 /// 22×22 monochrome aperture glyph (matches the .app icon's iris).

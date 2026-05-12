@@ -63,7 +63,9 @@ fn main() -> Result<()> {
     }));
 
     let mut registered = hotkeys::register_all(&settings.hotkeys)?;
-    let _tray = tray::build()?; // keep alive for the lifetime of the app
+    let tray_icon = tray::build()?;
+    tray::register(tray_icon); // park the TrayIcon in the tray module so
+                               // set_recording_indicator() and similar can mutate it later.
     let mut settings = Arc::new(settings);
 
     eprintln!(

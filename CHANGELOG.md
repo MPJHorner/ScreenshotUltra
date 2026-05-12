@@ -5,6 +5,26 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] — 2026-05-12
+
+Recording UX polish on top of v0.6.0's screen-recording v0.
+
+### Added — recording feedback
+- **Menu-bar indicator** — the aperture-iris glyph swaps to a filled
+  solid disc whenever a recording is in progress, and the tooltip
+  reads "Screenshot Ultra — recording". Removes the uncertainty about
+  "did I start it / stop it" that v0.6.0 had.
+- **Notification banner** on recording stop — top-right macOS banner
+  reads `<filename> · <size> · <duration>` so you can see your
+  recording landed even if you missed the Quick Tray (which can't
+  render a `.mov` thumbnail).
+- New `sinks::notify(title, body)` helper (shells out to
+  `osascript display notification`, so no UNUserNotification
+  permission dance).
+- New `tray::register(TrayIcon)` + `tray::set_recording_indicator(bool)`
+  — the tray module now owns the constructed `TrayIcon` so anywhere in
+  the app can toggle the indicator without threading it through.
+
 ## [0.6.0] — 2026-05-12
 
 The **M3 begins** release. Video + GIF recording lands, plus a third row

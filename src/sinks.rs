@@ -109,6 +109,31 @@ pub fn play_shutter() {
 #[cfg(not(target_os = "macos"))]
 pub fn play_shutter() {}
 
+/// Pop a top-right macOS notification banner. We shell out to
+/// `osascript display notification` so we don't have to deal with the
+/// `UNUserNotification` permission dance or bundle identifier quirks
+/// — fine for non-critical "your file is here" UX.
+#[cfg(target_os = "macos")]
+pub fn notify(title: &str, body: &str) {
+    // Naive but adequate quoting for AppleScript string literals.
+    let q = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let script = format!(
+        "display notification \"{}\" with title \"{}\"",
+        q(body),
+        q(title)
+    );
+    let _ = Command::new("/usr/bin/osascript")
+        .arg("-e")
+        .arg(&script)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn notify(_title: &str, _body: &str) {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

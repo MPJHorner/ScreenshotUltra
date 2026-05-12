@@ -21,6 +21,7 @@ use crate::logging;
 use crate::quick_tray;
 use crate::settings::Settings;
 use crate::sinks;
+use crate::tray;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecordingKind {
@@ -97,6 +98,7 @@ pub fn start(kind: RecordingKind, settings: &Settings) -> Result<()> {
         path,
         started: Instant::now(),
     });
+    tray::set_recording_indicator(true);
     Ok(())
 }
 
@@ -173,7 +175,34 @@ pub fn stop(settings: &Settings) -> Result<()> {
     );
 
     quick_tray::show(&final_path, settings.general.quick_tray_timeout_ms);
+    tray::set_recording_indicator(false);
+
+    // Recordings don't render as Quick-Tray thumbnails (NSImage can't
+    // load .mov frames without AVFoundation), so reinforce with a
+    // notification banner: at minimum the user knows where the file is.
+    let name = final_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("recording");
+    let pretty_size = pretty_bytes(bytes);
+    sinks::notify(
+        "Screenshot Ultra — recording saved",
+        &format!("{name}  ·  {pretty_size}  ·  {:.1}s", duration_s),
+    );
+
     Ok(())
+}
+
+fn pretty_bytes(b: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * 1024;
+    if b >= MB {
+        format!("{:.1} MB", b as f64 / MB as f64)
+    } else if b >= KB {
+        format!("{:.0} KB", b as f64 / KB as f64)
+    } else {
+        format!("{} B", b)
+    }
 }
 
 /// Stop if recording, start otherwise. Used by the global toggle hotkey.
