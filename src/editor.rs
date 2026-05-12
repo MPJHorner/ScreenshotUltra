@@ -521,6 +521,7 @@ mod mac {
                     4 => redo_last(),
                     5 => clear_shapes(),
                     6 => close_editor(),
+                    7 => copy_ocr_text(),
                     _ => {}
                 }
             }
@@ -1000,6 +1001,46 @@ mod mac {
                 }
             }
         });
+    }
+
+    /// OCR the source image (pre-annotation) and copy any recognised
+    /// text onto the clipboard. Annotations from the current editor
+    /// session aren't included — Save first if you want OCR of your
+    /// final rendered image.
+    fn copy_ocr_text() {
+        let path = EDITOR.with(|slot| slot.borrow().as_ref().map(|s| s.source_path.clone()));
+        let Some(path) = path else { return };
+        match crate::ocr::extract_text(&path) {
+            Some(text) => {
+                use std::io::Write;
+                if let Ok(mut child) = std::process::Command::new("/usr/bin/pbcopy")
+                    .stdin(std::process::Stdio::piped())
+                    .spawn()
+                {
+                    if let Some(stdin) = child.stdin.as_mut() {
+                        let _ = stdin.write_all(text.as_bytes());
+                    }
+                    let _ = child.wait();
+                }
+                let chars = text.chars().count();
+                crate::logging::event(serde_json::json!({
+                    "evt": "ocr",
+                    "from": "editor",
+                    "path": path.display().to_string(),
+                    "chars": chars,
+                }));
+                crate::sinks::notify(
+                    "Screenshot Ultra — text copied",
+                    &format!("{chars} characters on clipboard"),
+                );
+            }
+            None => {
+                crate::sinks::notify(
+                    "Screenshot Ultra — no text",
+                    "Vision didn't find any text in this image.",
+                );
+            }
+        }
     }
 
     /// Render the original image + all strokes into a PNG at the source
@@ -1505,6 +1546,11 @@ mod mac {
                     "Copy ⌘C",
                     "Copy the annotated image to the clipboard (⌘C)",
                     2,
+                ),
+                (
+                    "OCR",
+                    "Copy recognised text from this image to clipboard (Vision)",
+                    7,
                 ),
                 ("Undo ⌘Z", "Undo the last shape (⌘Z)", 3),
                 ("Redo ⌘⇧Z", "Redo (⌘⇧Z)", 4),

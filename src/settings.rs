@@ -114,6 +114,9 @@ fn default_record_gif() -> String {
 fn default_help() -> String {
     "ctrl+alt+cmd+slash".into()
 }
+fn default_history() -> String {
+    "ctrl+alt+cmd+h".into()
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Hotkeys {
@@ -161,6 +164,9 @@ pub struct Hotkeys {
     /// Show the keyboard-shortcut cheat sheet window. Empty = unbound.
     #[serde(default = "default_help")]
     pub help: String,
+    /// Open the per-folder history window. Empty = unbound.
+    #[serde(default = "default_history")]
+    pub history: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -210,6 +216,7 @@ impl Default for Hotkeys {
             record_video: "ctrl+alt+cmd+v".into(),
             record_gif: "ctrl+alt+cmd+g".into(),
             help: "ctrl+alt+cmd+slash".into(),
+            history: "ctrl+alt+cmd+h".into(),
         }
     }
 }

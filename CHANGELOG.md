@@ -5,6 +5,47 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-05-12
+
+The **history-and-OCR** release. Two new in-app windows plus a custom
+hand-rolled docs site that matches the rest of the Ultra family
+exactly.
+
+### Added — History window (`⌃⌥⌘H`)
+- Native `NSWindow` browser of the per-folder NDJSON history index
+  (`<save_folder>/.screenshot-ultra/index.ndjson`). One row per
+  capture, most recent first, fixed-width columns for timestamp /
+  mode / size / filename. ⌘F searches the view.
+- Friendly "No history yet" empty state for first-run.
+- New `Action::History`, tray menu "History…" entry.
+
+### Added — Editor "OCR" button
+- New action button in the annotation editor's bottom row that runs
+  Apple Vision against the source image and copies the recognised
+  text onto the clipboard via `pbcopy`. Same notification flow as the
+  Quick Tray's Text button.
+- 12 default hotkeys now register at startup (added `history`).
+
+### Changed — custom docs site replacing mkdocs-material
+- The whole `site/` directory is now a hand-rolled static site
+  matching MailBox Ultra / Postbin Ultra exactly:
+  - Node 20 builder in `site/build.mjs` (~370 LOC, deps: gray-matter +
+    marked).
+  - `site/templates/{layout,home}.html` + `partials/{nav,footer}.html`
+    with the aperture-iris SVG logo inline.
+  - `site/static/style.css` carried over from MailboxUltra with the
+    palette swapped to brand red (`#FF3D54` / `#B91D36`), light-mode
+    accent `#DC2542`.
+  - `site/content/*.md` — 10 frontmatter-equipped pages including a
+    full home hero (badge, gradient headline, hero meta strip, feature
+    grid, four-step tour, "Part of the Ultra family" cross-link grid).
+  - `.github/workflows/pages.yml` swapped from `pip install mkdocs-material`
+    to `setup-node@v4` + `npm ci` + `node build.mjs`.
+  - The build pulls version from `Cargo.toml` and parses
+    `CHANGELOG.md` release sections at build time so the docs site
+    can never drift from shipping code.
+- Site lives at the same URL: <https://mpjhorner.github.io/ScreenshotUltra/>.
+
 ## [0.7.0] — 2026-05-12
 
 The **M5 v0** release. On-device OCR via Apple Vision lands as a Quick
