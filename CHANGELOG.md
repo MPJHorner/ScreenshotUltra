@@ -5,6 +5,25 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] — 2026-05-12
+
+### Added — Keystroke overlay for screencasts
+- Setting **`[recording].keystroke_overlay = true`** (default off) shows
+  a floating dark-glass pill at the bottom-centre of the main screen
+  whenever a recording is active. Every key (and modifier combo) you
+  type briefly flashes into the pill — perfect for screencasts where
+  you want viewers to see which shortcut you just hit without
+  narrating.
+- Translates raw NSEvent characters into the macOS glyphs you'd expect:
+  `⌘C`, `↩`, `⌫`, `Tab`, `Space`, arrow keys, `F1`–`F12`, etc.
+- New module `src/keystroke_overlay.rs` (~290 LOC). NSEvent global
+  monitor + transparent borderless click-through NSWindow + custom
+  `STUKeystrokePill` NSView that paints the rounded pill. Keys fade
+  after 2 s; up to 8 chunks shown at once. Requires Accessibility
+  permission (macOS prompts on first use).
+- `recording::start` enables the overlay if the setting's on;
+  `recording::stop` always tears it down.
+
 ## [0.8.0] — 2026-05-12
 
 The **history-and-OCR** release. Two new in-app windows plus a custom

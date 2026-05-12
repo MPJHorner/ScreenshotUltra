@@ -17,6 +17,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use crate::capture::{render_path_for_recording, write_history_index};
+use crate::keystroke_overlay;
 use crate::logging;
 use crate::quick_tray;
 use crate::settings::Settings;
@@ -99,6 +100,9 @@ pub fn start(kind: RecordingKind, settings: &Settings) -> Result<()> {
         started: Instant::now(),
     });
     tray::set_recording_indicator(true);
+    if settings.recording.keystroke_overlay {
+        keystroke_overlay::start();
+    }
     Ok(())
 }
 
@@ -176,6 +180,7 @@ pub fn stop(settings: &Settings) -> Result<()> {
 
     quick_tray::show(&final_path, settings.general.quick_tray_timeout_ms);
     tray::set_recording_indicator(false);
+    keystroke_overlay::stop();
 
     // Recordings don't render as Quick-Tray thumbnails (NSImage can't
     // load .mov frames without AVFoundation), so reinforce with a

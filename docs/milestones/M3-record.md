@@ -18,7 +18,12 @@ as still capture.
       passes `-g` to `screencapture`. Device-picker UI deferred.
 - [x] **Mouse-click highlight** — `[recording].show_clicks = true`
       (default) passes `-k` to `screencapture`.
-- [ ] Keystroke overlay, toggleable, with allow/deny list per app.
+- [x] **Keystroke overlay**, toggleable via
+      `[recording].keystroke_overlay = true`. Shows recently-typed
+      keys in a rounded pill at the bottom-centre of the screen during
+      recording. NSEvent global monitor + custom NSView. Requires
+      Accessibility permission. *(Per-app allow/deny list deferred —
+      v0 shows every key.)*
 - [x] **GIF recording** — capture as `.mov` then post-process via
       `ffmpeg` (palette + paletteuse for high-quality small GIFs). If
       `ffmpeg` isn't on PATH we keep the `.mov` and log it. A future

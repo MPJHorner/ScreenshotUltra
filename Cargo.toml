@@ -1,6 +1,6 @@
 [package]
 name = "screenshot-ultra"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 rust-version = "1.75"
 description = "A snappy, hotkey-first macOS screenshot and screen recorder. Local-first. No cloud."

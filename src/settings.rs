@@ -28,6 +28,10 @@ pub struct RecordingOptions {
     /// screencapture). System audio capture requires a separate
     /// virtual audio device on macOS; not exposed yet.
     pub record_microphone: bool,
+    /// Show a floating overlay of recently-typed keys while recording.
+    /// Requires Accessibility permission (macOS prompts on first use).
+    #[serde(default)]
+    pub keystroke_overlay: bool,
 }
 
 impl Default for RecordingOptions {
@@ -35,6 +39,7 @@ impl Default for RecordingOptions {
         Self {
             show_clicks: true,
             record_microphone: false,
+            keystroke_overlay: false,
         }
     }
 }

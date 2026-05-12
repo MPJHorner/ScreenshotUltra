@@ -10,7 +10,9 @@ mod eyedropper;
 mod help;
 mod history;
 mod hotkeys;
+mod keystroke_overlay;
 mod logging;
+// Modules listed alphabetically below.
 mod ocr;
 mod pin;
 mod preferences;
