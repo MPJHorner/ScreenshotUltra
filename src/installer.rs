@@ -35,10 +35,7 @@ static INSTALLING: AtomicBool = AtomicBool::new(false);
 /// zip + verify the checksum.
 pub fn install_async(latest_version: String) {
     if INSTALLING.swap(true, Ordering::SeqCst) {
-        crate::sinks::notify(
-            "Screenshot Ultra",
-            "An update is already being prepared.",
-        );
+        crate::sinks::notify("Screenshot Ultra", "An update is already being prepared.");
         return;
     }
 
@@ -68,23 +65,19 @@ pub fn install_async(latest_version: String) {
                     "version": latest_version,
                     "error": err,
                 }));
-                crate::sinks::notify(
-                    "Screenshot Ultra — couldn't install update",
-                    &err,
-                );
+                crate::sinks::notify("Screenshot Ultra — couldn't install update", &err);
             }
         }
     });
 }
 
 fn install_blocking(latest: &str) -> Result<(), String> {
-    let install_path = locate_installed_app()
-        .ok_or_else(|| {
-            "couldn't find /Applications/Screenshot Ultra.app — the in-place \
+    let install_path = locate_installed_app().ok_or_else(|| {
+        "couldn't find /Applications/Screenshot Ultra.app — the in-place \
              installer is only wired up when the app lives in /Applications. \
              Download the new version manually from the Releases page."
-                .to_string()
-        })?;
+            .to_string()
+    })?;
     if !is_writable(&install_path) {
         return Err(format!(
             "/Applications/Screenshot Ultra.app isn't writable by this user. \
@@ -166,7 +159,10 @@ fn is_writable(path: &Path) -> bool {
     let Some(parent) = path.parent() else {
         return false;
     };
-    let probe = parent.join(format!(".screenshot-ultra-write-probe-{}", std::process::id()));
+    let probe = parent.join(format!(
+        ".screenshot-ultra-write-probe-{}",
+        std::process::id()
+    ));
     match std::fs::write(&probe, b"") {
         Ok(()) => {
             let _ = std::fs::remove_file(&probe);
@@ -224,10 +220,7 @@ fn verify_sha256(workdir: &Path, sha_path: &Path) -> Result<(), String> {
 }
 
 fn notify_progress(stage: &str, latest: &str) {
-    crate::sinks::notify(
-        "Screenshot Ultra — update",
-        &format!("{stage} (v{latest})"),
-    );
+    crate::sinks::notify("Screenshot Ultra — update", &format!("{stage} (v{latest})"));
 }
 
 /// Embedded helper script. Written to /tmp/, marked executable, then
@@ -299,8 +292,7 @@ fn spawn_swap_helper(staged_app: &Path, install_path: &Path) -> Result<(), Strin
         .permissions();
     use std::os::unix::fs::PermissionsExt;
     perms.set_mode(0o755);
-    std::fs::set_permissions(&helper, perms)
-        .map_err(|e| format!("chmodding helper: {e}"))?;
+    std::fs::set_permissions(&helper, perms).map_err(|e| format!("chmodding helper: {e}"))?;
 
     let pid = std::process::id().to_string();
     Command::new("/bin/bash")
