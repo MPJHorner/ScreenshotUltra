@@ -66,6 +66,11 @@ silent_fullscreen      = ""
 clipboard              = true
 disk                   = true
 shell                  = ""             # e.g. "scp $1 user@host:/var/www/img/"
+shell_region           = ""             # per-mode overrides; empty falls back to `shell`
+shell_window           = ""
+shell_fullscreen       = ""
+shell_video            = ""
+shell_gif              = ""
 ```
 
 ## Filename template tokens

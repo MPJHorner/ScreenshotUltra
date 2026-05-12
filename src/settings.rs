@@ -194,6 +194,41 @@ pub struct Sinks {
     /// Runs detached so it doesn't block the capture pipeline.
     #[serde(default)]
     pub shell: String,
+
+    // Per-mode shell overrides. If set, replaces `shell` for that mode.
+    // Useful when you want region captures to land in one place and
+    // fullscreen recordings to land in another.
+    #[serde(default)]
+    pub shell_region: String,
+    #[serde(default)]
+    pub shell_window: String,
+    #[serde(default)]
+    pub shell_fullscreen: String,
+    #[serde(default)]
+    pub shell_video: String,
+    #[serde(default)]
+    pub shell_gif: String,
+}
+
+impl Sinks {
+    /// Pick the shell command for `mode_token`, falling back to the
+    /// global `shell` when no override is set. Returns the empty
+    /// string if neither is set.
+    pub fn shell_for(&self, mode_token: &str) -> &str {
+        let override_for = match mode_token {
+            "region" => &self.shell_region,
+            "window" => &self.shell_window,
+            "fullscreen" | "fullscreen_timed" => &self.shell_fullscreen,
+            "video" => &self.shell_video,
+            "gif" => &self.shell_gif,
+            _ => "",
+        };
+        if !override_for.trim().is_empty() {
+            override_for
+        } else {
+            &self.shell
+        }
+    }
 }
 
 impl Default for General {
@@ -239,6 +274,11 @@ impl Default for Sinks {
             clipboard: true,
             disk: true,
             shell: String::new(),
+            shell_region: String::new(),
+            shell_window: String::new(),
+            shell_fullscreen: String::new(),
+            shell_video: String::new(),
+            shell_gif: String::new(),
         }
     }
 }
@@ -379,5 +419,56 @@ mod tests {
     fn non_tilde_paths_pass_through() {
         let p = expand_tilde("/tmp/foo");
         assert_eq!(p, PathBuf::from("/tmp/foo"));
+    }
+
+    #[test]
+    fn shell_for_falls_back_to_global() {
+        let s = Sinks {
+            shell: "global-cmd".into(),
+            ..Sinks::default()
+        };
+        assert_eq!(s.shell_for("region"), "global-cmd");
+        assert_eq!(s.shell_for("video"), "global-cmd");
+    }
+
+    #[test]
+    fn shell_for_uses_per_mode_override() {
+        let s = Sinks {
+            shell: "global-cmd".into(),
+            shell_region: "region-cmd".into(),
+            shell_video: "video-cmd".into(),
+            ..Sinks::default()
+        };
+        assert_eq!(s.shell_for("region"), "region-cmd");
+        assert_eq!(s.shell_for("video"), "video-cmd");
+        // Modes without an override fall back to the global.
+        assert_eq!(s.shell_for("fullscreen"), "global-cmd");
+        assert_eq!(s.shell_for("window"), "global-cmd");
+    }
+
+    #[test]
+    fn shell_for_treats_whitespace_override_as_empty() {
+        let s = Sinks {
+            shell: "fallback".into(),
+            shell_region: "   ".into(),
+            ..Sinks::default()
+        };
+        assert_eq!(s.shell_for("region"), "fallback");
+    }
+
+    #[test]
+    fn shell_for_with_no_global_and_no_override_returns_empty() {
+        let s = Sinks::default();
+        assert_eq!(s.shell_for("region"), "");
+        assert_eq!(s.shell_for("video"), "");
+    }
+
+    #[test]
+    fn shell_for_timed_fullscreen_uses_fullscreen_override() {
+        let s = Sinks {
+            shell_fullscreen: "fs-cmd".into(),
+            ..Sinks::default()
+        };
+        assert_eq!(s.shell_for("fullscreen_timed"), "fs-cmd");
     }
 }

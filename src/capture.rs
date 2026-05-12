@@ -147,9 +147,9 @@ pub fn run_timed_fullscreen(delay_seconds: u32, settings: &Settings) -> Result<(
     {
         sinks_fired.push("clipboard");
     }
-    if !settings.sinks.shell.trim().is_empty()
-        && matches!(sinks::shell_sink(&settings.sinks.shell, &path), Ok(true))
-    {
+    // Timed-fullscreen path: use the fullscreen mode token for shell-sink lookup.
+    let shell_cmd = settings.sinks.shell_for("fullscreen_timed");
+    if !shell_cmd.trim().is_empty() && matches!(sinks::shell_sink(shell_cmd, &path), Ok(true)) {
         sinks_fired.push("shell");
     }
     if settings.general.play_shutter_sound {
@@ -253,8 +253,9 @@ pub fn run(mode: CaptureMode, show_tray: bool, settings: &Settings) -> Result<()
         }
     }
 
-    if !settings.sinks.shell.trim().is_empty() {
-        match sinks::shell_sink(&settings.sinks.shell, &path) {
+    let shell_cmd = settings.sinks.shell_for(mode.as_str());
+    if !shell_cmd.trim().is_empty() {
+        match sinks::shell_sink(shell_cmd, &path) {
             Ok(true) => sinks_fired.push("shell"),
             Ok(false) => {}
             Err(err) => eprintln!("shell sink failed: {err:#}"),

@@ -5,6 +5,29 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] — 2026-05-12
+
+### Added — per-mode shell sink overrides
+- New `[sinks].shell_region`, `shell_window`, `shell_fullscreen`,
+  `shell_video`, `shell_gif` fields. If set, override the global
+  `[sinks].shell` for that capture mode — so region captures can land
+  on S3 while videos go to your team's Slack while GIFs go to a
+  personal web server. Each override is independently optional;
+  whatever's empty falls back to the global `shell`.
+- `Sinks::shell_for(mode)` is the single lookup used by every
+  capture path (still capture, timed fullscreen, and recording).
+  Timed-fullscreen captures use the `fullscreen` override.
+- 5 new tests for the lookup logic.
+
+Example:
+
+```toml
+[sinks]
+shell        = "rclone copy $1 cloud:misc/"
+shell_video  = "scp $1 home.example.com:/var/www/recordings/"
+shell_gif    = "/usr/local/bin/upload-shot $1"
+```
+
 ## [0.9.0] — 2026-05-12
 
 ### Changed — M6 (sign/notarise) parked

@@ -80,6 +80,26 @@ printf '%s' "$URL" | pbcopy
 shell = "/usr/local/bin/upload-shot $1"
 ```
 
+## Per-mode shell overrides
+
+Want region captures to land on S3 while videos go to your team's
+Slack? Each capture mode can have its own shell command that
+overrides the global one:
+
+```toml
+[sinks]
+shell             = "rclone copy $1 cloud:misc/"
+shell_region      = ""                                      # falls back to shell
+shell_window      = "scp $1 user@host:/var/www/img/"
+shell_fullscreen  = ""                                      # falls back to shell
+shell_video       = "scp $1 home.example.com:/var/www/recordings/"
+shell_gif         = "/usr/local/bin/upload-shot $1"
+```
+
+Empty (or whitespace-only) overrides fall back to the global `shell`.
+Set the global to `""` if you want a mode-specific command to be
+the *only* shell sink that fires.
+
 ## Why no built-in cloud uploader?
 
 Building a "share to URL" feature would mean shipping a hosted service

@@ -151,11 +151,8 @@ pub fn stop(settings: &Settings) -> Result<()> {
     };
 
     let mut sinks_fired = vec!["disk"];
-    if !settings.sinks.shell.trim().is_empty()
-        && matches!(
-            sinks::shell_sink(&settings.sinks.shell, &final_path),
-            Ok(true)
-        )
+    let shell_cmd = settings.sinks.shell_for(rec.kind.as_str());
+    if !shell_cmd.trim().is_empty() && matches!(sinks::shell_sink(shell_cmd, &final_path), Ok(true))
     {
         sinks_fired.push("shell");
     }
