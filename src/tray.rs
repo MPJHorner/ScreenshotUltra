@@ -34,6 +34,7 @@ pub enum MenuAction {
     RevealSettings,
     RevealLog,
     Preferences,
+    Help,
     About,
     Quit,
 }
@@ -56,6 +57,7 @@ struct Ids {
     reveal_settings: MenuId,
     reveal_log: MenuId,
     preferences: MenuId,
+    help: MenuId,
     about: MenuId,
     quit: MenuId,
 }
@@ -80,6 +82,7 @@ pub fn build() -> Result<TrayIcon> {
     let record_gif = MenuItem::new(record_gif_label(), true, None);
     let open_folder = MenuItem::new("Open Save Folder", true, None);
     let preferences = MenuItem::new("Preferences…\t⌃⌥⌘,", true, None);
+    let help = MenuItem::new("Cheat Sheet\t⌃⌥⌘/", true, None);
     let reveal_settings = MenuItem::new("Edit settings.toml directly…", true, None);
     let reveal_log = MenuItem::new("Reveal Log File", true, None);
     let about = MenuItem::new("About Screenshot Ultra…", true, None);
@@ -103,6 +106,7 @@ pub fn build() -> Result<TrayIcon> {
         reveal_settings: reveal_settings.id().clone(),
         reveal_log: reveal_log.id().clone(),
         preferences: preferences.id().clone(),
+        help: help.id().clone(),
         about: about.id().clone(),
         quit: quit.id().clone(),
     };
@@ -128,6 +132,7 @@ pub fn build() -> Result<TrayIcon> {
     menu.append(&PredefinedMenuItem::separator()).ok();
     menu.append(&open_folder).ok();
     menu.append(&preferences).ok();
+    menu.append(&help).ok();
     menu.append(&reveal_settings).ok();
     menu.append(&reveal_log).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
@@ -217,6 +222,8 @@ pub fn menu_action(id: &MenuId) -> Option<MenuAction> {
         Some(MenuAction::RevealLog)
     } else if id == &ids.preferences {
         Some(MenuAction::Preferences)
+    } else if id == &ids.help {
+        Some(MenuAction::Help)
     } else if id == &ids.about {
         Some(MenuAction::About)
     } else if id == &ids.quit {

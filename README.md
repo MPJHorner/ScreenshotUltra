@@ -68,6 +68,7 @@ Every binding is rebindable in `~/Library/Application Support/ScreenshotUltra/se
 | Pin last to screen           | `⌃⌥⌘.`  | Floating always-on-top window               |
 | Colour picker (eyedropper)   | `⌃⌥⌘P`  | Copies the picked `#rrggbb` to clipboard    |
 | Preferences                  | `⌃⌥⌘,`  | In-app `settings.toml` editor               |
+| Cheat Sheet                  | `⌃⌥⌘/`  | All hotkeys + editor shortcuts in one window |
 | Record video (toggle)        | `⌃⌥⌘V`  | Start/stop a screen recording (`.mov`)      |
 | Record GIF (toggle)          | `⌃⌥⌘G`  | Same flow, post-processed to `.gif` via `ffmpeg` |
 | Silent variants              | _unset_ | Set `silent_*` in `settings.toml` to enable |

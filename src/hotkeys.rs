@@ -23,6 +23,7 @@ pub enum Action {
     Preferences,
     RecordVideo,
     RecordGif,
+    Help,
 }
 
 impl Action {
@@ -41,6 +42,7 @@ impl Action {
             Action::Preferences => "preferences",
             Action::RecordVideo => "record_video",
             Action::RecordGif => "record_gif",
+            Action::Help => "help",
         }
     }
     pub fn label(self) -> &'static str {
@@ -58,6 +60,7 @@ impl Action {
             Action::Preferences => "Preferences…",
             Action::RecordVideo => "Record video (toggle)",
             Action::RecordGif => "Record GIF (toggle)",
+            Action::Help => "Cheat sheet",
         }
     }
     pub fn show_tray(self) -> bool {
@@ -96,6 +99,7 @@ pub fn register_all(cfg: &Hotkeys) -> Result<Registered> {
         (Action::Preferences, cfg.preferences.clone()),
         (Action::RecordVideo, cfg.record_video.clone()),
         (Action::RecordGif, cfg.record_gif.clone()),
+        (Action::Help, cfg.help.clone()),
     ] {
         // Empty string = intentionally unbound. Skip silently.
         if accel.trim().is_empty() {
@@ -238,8 +242,8 @@ mod tests {
         let reg = register_all(&cfg).unwrap();
         // region/window/fullscreen + pin_last + repeat_last
         // + open_clipboard_image + color_picker + preferences
-        // + record_video + record_gif = 10
-        assert_eq!(reg.actions.len(), 10);
+        // + record_video + record_gif + help = 11
+        assert_eq!(reg.actions.len(), 11);
         // None should be a silent_* action since they're empty by default.
         assert!(reg.actions.iter().all(|(a, _)| !matches!(
             a,

@@ -7,6 +7,7 @@ mod about;
 mod capture;
 mod editor;
 mod eyedropper;
+mod help;
 mod hotkeys;
 mod logging;
 mod pin;
@@ -150,6 +151,7 @@ fn main() -> Result<()> {
                             .status();
                     }
                     Some(tray::MenuAction::Preferences) => preferences::show(),
+                    Some(tray::MenuAction::Help) => help::show(&settings),
                     Some(tray::MenuAction::Quit) => *control_flow = ControlFlow::Exit,
                     None => {}
                 },
@@ -319,6 +321,10 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
             }
             return;
         }
+        hotkeys::Action::Help => {
+            help::show(settings);
+            return;
+        }
         _ => {}
     }
 
@@ -332,7 +338,8 @@ fn handle_action(action: hotkeys::Action, settings: &Settings) {
         | hotkeys::Action::ColorPicker
         | hotkeys::Action::Preferences
         | hotkeys::Action::RecordVideo
-        | hotkeys::Action::RecordGif => unreachable!(),
+        | hotkeys::Action::RecordGif
+        | hotkeys::Action::Help => unreachable!(),
     };
     run_capture(mode, action.show_tray(), settings);
 }

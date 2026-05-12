@@ -5,6 +5,19 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] — 2026-05-12
+
+### Added — Cheat Sheet window (`⌃⌥⌘/`)
+- New in-app reference card listing every global hotkey + every editor
+  tool / colour / width / action / pin gesture / Quick-Tray button.
+- Rendered into a read-only monospaced `NSTextView` so users can scroll,
+  `⌘F` search, and copy lines. Window is resizable + searchable.
+- Hotkey bindings come from the **live** `Settings` — if you've
+  rebound `region` to `⌃⌥⌘5`, the cheat sheet shows `⌃⌥⌘5`. Unbound
+  slots render as `—`.
+- New tray menu item "Cheat Sheet" with the `⌃⌥⌘/` accelerator shown
+  inline.
+
 ## [0.6.1] — 2026-05-12
 
 Recording UX polish on top of v0.6.0's screen-recording v0.

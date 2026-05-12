@@ -111,6 +111,9 @@ fn default_record_video() -> String {
 fn default_record_gif() -> String {
     "ctrl+alt+cmd+g".into()
 }
+fn default_help() -> String {
+    "ctrl+alt+cmd+slash".into()
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Hotkeys {
@@ -155,6 +158,9 @@ pub struct Hotkeys {
     /// Toggle GIF recording on/off. Empty = unbound.
     #[serde(default = "default_record_gif")]
     pub record_gif: String,
+    /// Show the keyboard-shortcut cheat sheet window. Empty = unbound.
+    #[serde(default = "default_help")]
+    pub help: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -203,6 +209,7 @@ impl Default for Hotkeys {
             preferences: "ctrl+alt+cmd+comma".into(),
             record_video: "ctrl+alt+cmd+v".into(),
             record_gif: "ctrl+alt+cmd+g".into(),
+            help: "ctrl+alt+cmd+slash".into(),
         }
     }
 }
