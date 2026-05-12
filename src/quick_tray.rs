@@ -334,12 +334,52 @@ mod mac {
     }
 
     fn load_image(path: &Path) -> Option<Retained<NSImage>> {
+        // For video files, NSImage::initWithContentsOfURL: returns nil.
+        // Side-load a poster frame via macOS's `qlmanage` and point
+        // NSImage at the resulting PNG.
+        let load_path = match path.extension().and_then(|e| e.to_str()) {
+            Some("mov") | Some("mp4") | Some("m4v") => poster_frame(path)?,
+            _ => path.to_path_buf(),
+        };
         unsafe {
-            let s = NSString::from_str(&path.to_string_lossy());
+            let s = NSString::from_str(&load_path.to_string_lossy());
             let url = NSURL::fileURLWithPath(&s);
             let img: Option<Retained<NSImage>> =
                 msg_send![NSImage::alloc(), initWithContentsOfURL: &*url];
             img
         }
+    }
+
+    /// Render a poster-frame PNG for a video via macOS's `qlmanage -t`
+    /// command. Cached under TMPDIR so repeated tray shows of the same
+    /// recording reuse it. Returns None if qlmanage didn't produce a
+    /// file (corrupted recording, missing tool, etc.).
+    fn poster_frame(video_path: &Path) -> Option<std::path::PathBuf> {
+        let stem = video_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("video");
+        let tmp = std::env::temp_dir().join("screenshot-ultra-posters");
+        let _ = std::fs::create_dir_all(&tmp);
+        // qlmanage writes `<input>.png` into the -o directory.
+        let expected = tmp.join(format!("{stem}.png"));
+        if expected.exists() {
+            return Some(expected);
+        }
+        let status = std::process::Command::new("/usr/bin/qlmanage")
+            .arg("-t")
+            .arg("-s")
+            .arg("480")
+            .arg("-o")
+            .arg(&tmp)
+            .arg(video_path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .ok()?;
+        if !status.success() || !expected.exists() {
+            return None;
+        }
+        Some(expected)
     }
 }
