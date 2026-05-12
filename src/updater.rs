@@ -17,6 +17,11 @@ static IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 /// Run an update check on a background thread. Cheap, single-shot,
 /// always safe to call. The caller (main.rs) calls this on startup
 /// when the setting is on, and again on `Check for Updates…` clicks.
+///
+/// `force = true` (menu click) → on a hit, post a "newer available"
+/// event into the tao loop so the main thread can show the
+/// Install-Now NSAlert. `force = false` (background poll) → just
+/// notify; we don't want to steal focus from a typing user.
 pub fn check_now(force: bool) {
     if IN_FLIGHT.swap(true, Ordering::SeqCst) {
         return;
@@ -27,6 +32,15 @@ pub fn check_now(force: bool) {
         IN_FLIGHT.store(false, Ordering::SeqCst);
         match result {
             Ok(Some(latest)) => {
+                if crate::installer::is_skipped(&latest) {
+                    crate::logging::event(serde_json::json!({
+                        "evt": "update_available_skipped",
+                        "current": current,
+                        "latest": latest,
+                    }));
+                    let _ = stamp_last_check();
+                    return;
+                }
                 crate::logging::event(serde_json::json!({
                     "evt": "update_available",
                     "current": current,
@@ -35,14 +49,18 @@ pub fn check_now(force: bool) {
                 crate::sinks::notify(
                     "Screenshot Ultra — update available",
                     &format!(
-                        "v{latest} is out (you're on v{current}). Tap to open the release page.",
+                        "v{latest} is out (you're on v{current}). Click 'Check for Updates…' in the menu to install.",
                         latest = latest,
                         current = current
                     ),
                 );
-                // Stamp the last-checked time so the scheduler doesn't
-                // re-fire within 24 h.
                 let _ = stamp_last_check();
+                if force {
+                    // The check was user-initiated (menu click) so we
+                    // can interrupt them with a modal. Marshal back to
+                    // the main thread to show the alert.
+                    show_install_dialog_on_main(latest);
+                }
             }
             Ok(None) => {
                 let _ = stamp_last_check();
@@ -90,6 +108,51 @@ pub fn spawn_background_scheduler() {
         }
     });
 }
+
+/// Hop to the main thread and present the Install-Now NSAlert.
+///
+/// `dispatch_get_main_queue()` is a static-inline in the libdispatch
+/// headers — not an exported symbol — so we reference the underlying
+/// `_dispatch_main_q` global instead. Same value, just one layer down.
+#[cfg(target_os = "macos")]
+fn show_install_dialog_on_main(latest: String) {
+    use block2::RcBlock;
+    #[repr(C)]
+    struct DispatchQueueS {
+        _private: [u8; 0],
+    }
+    unsafe extern "C" {
+        static _dispatch_main_q: DispatchQueueS;
+        fn dispatch_async(queue: *mut std::ffi::c_void, block: *mut std::ffi::c_void);
+    }
+    let block = RcBlock::new(move || {
+        let latest = latest.clone();
+        match crate::installer::offer_install(&latest) {
+            crate::installer::InstallChoice::InstallNow => {
+                crate::installer::install_async(latest);
+            }
+            crate::installer::InstallChoice::Skip => {
+                crate::installer::mark_skipped(&latest);
+                crate::logging::event(serde_json::json!({
+                    "evt": "update_skipped",
+                    "version": latest,
+                }));
+            }
+            crate::installer::InstallChoice::Later => {}
+        }
+    });
+    unsafe {
+        let queue = &_dispatch_main_q as *const _ as *mut std::ffi::c_void;
+        dispatch_async(queue, (&*block) as *const _ as *mut std::ffi::c_void);
+    }
+    // dispatch_async retains the block, but RcBlock's drop releases
+    // its own ref — leak our handle so the block stays alive at least
+    // until libdispatch's retain has bumped the count.
+    std::mem::forget(block);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn show_install_dialog_on_main(_latest: String) {}
 
 fn stamp_path() -> Option<PathBuf> {
     let base = dirs::config_dir().or_else(dirs::home_dir)?;

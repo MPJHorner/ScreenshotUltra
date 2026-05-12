@@ -10,6 +10,7 @@ mod eyedropper;
 mod help;
 mod history;
 mod hotkeys;
+mod installer;
 mod keystroke_overlay;
 mod logging;
 // Modules listed alphabetically below.

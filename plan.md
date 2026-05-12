@@ -537,7 +537,7 @@ Used for: history index, debugging, and (optionally) piping to `jq`/`fzf` workfl
 - App sandbox: **disabled** (sandboxing limits ScreenCaptureKit reach). We document this honestly.
 - Hardened runtime: **enabled** with the minimum entitlements (`com.apple.security.device.screen-capture`, `…audio-input`, `…device.microphone` only if mic is enabled in settings).
 - No network code links into the binary by default. The optional shell-sink is gated behind a Preferences toggle and a confirmation dialog the first time it runs.
-- No telemetry, ever. We do not phone home for update checks unless the user enables it; default is **off**, with a manual "Check for Updates" menu item.
+- No telemetry, ever. We do not phone home for update checks unless the user enables it; default is **off**, with a manual "Check for Updates" menu item. When a check hits, v0.11 offers an in-place auto-installer: download the new `.zip` + `.sha256` from GitHub Releases, verify the checksum, swap `/Applications/Screenshot Ultra.app` via a detached helper, relaunch. No silent updates — there's always a confirmation dialog on the user's explicit menu click.
 - Crash reports stay on disk under `~/Library/Logs/ScreenshotUltra/crashes/`. No auto-send.
 
 ---

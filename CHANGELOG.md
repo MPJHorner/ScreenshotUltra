@@ -5,6 +5,51 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-05-12
+
+The **auto-update** release. v0.10 added a passive update check
+that nudged the user toward the Releases page; v0.11 closes the
+loop with an in-place installer that downloads, verifies, and
+relaunches without ever leaving the app.
+
+### Added — in-place auto-update from GitHub Releases
+- **`src/installer.rs`** — full Rust pipeline that pulls the
+  release `.zip` + matching `.sha256` from
+  `github.com/MPJHorner/ScreenshotUltra/releases`, verifies the
+  checksum via `shasum -c`, unpacks with `ditto -xk`, then spawns
+  a detached bash helper that waits for our PID to exit, atomically
+  swaps `/Applications/Screenshot Ultra.app`, clears the
+  Gatekeeper `com.apple.quarantine` xattr, and relaunches via `open`.
+- **`Check for Updates…`** tray-menu item now offers an
+  `Install Now / Later / Skip This Version` NSAlert on hit. Skipped
+  versions write a marker into `~/.config/ScreenshotUltra/` so the
+  user isn't re-prompted for the same release.
+- Background update check (`[general].check_for_updates = true`)
+  still just notifies — it never steals focus from a typing user.
+  The modal is only shown on an explicit menu click.
+- New NDJSON events: `update_installing`, `update_install_failed`,
+  `update_available_skipped`, `update_skipped`.
+
+### Safety
+- We refuse to auto-install if the app isn't in `/Applications/`
+  (e.g. running from `~/Downloads`, `cargo run`, etc.) — the
+  manual-update notification fires instead.
+- We refuse to auto-install if `/Applications/Screenshot Ultra.app`
+  isn't writable by the current user — surfaces a notification that
+  explains the situation and links to the Releases page.
+- The helper script backs up the existing bundle before moving the
+  new one into place, and restores the backup if the swap fails.
+- SHA-256 verification is mandatory; a checksum mismatch aborts
+  before anything is touched in `/Applications/`.
+
+### Internals
+- `_dispatch_main_q` is referenced directly via `extern "C"`
+  because `dispatch_get_main_queue()` is a libdispatch static-inline
+  with no exported symbol. `block2::RcBlock` carries the install
+  closure to the main run loop.
+- Once M6 (signing + notarisation) lands the only change here will
+  be an extra signature-verify step before the swap.
+
 ## [0.10.0] — 2026-05-12
 
 The **native recorder** release. `screencapture -v` was a great
