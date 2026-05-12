@@ -5,6 +5,28 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] — 2026-05-12
+
+The **Quick Tray redesign** release. The post-capture action bar is no
+longer a fixed slab pinned to the bottom-right of the screen — it's a
+borderless, screenshot-first floating card that anchors to where you
+just finished the cut.
+
+### Changed — Quick Tray
+- **`src/quick_tray.rs`** — replaced the titled 540×110 NSWindow with
+  a borderless, rounded NSVisualEffectView (HUDWindow material) panel.
+  The captured screenshot is now rendered large on top (sized to its
+  own aspect ratio, 260–380 × 150–260pt, with rounded corners and the
+  same drag-out behavior as before). The action row sits directly
+  beneath as a compact strip of SF Symbol icon buttons (Copy, Text,
+  Edit, Folder, Reveal, Pin, Discard) with hover borders and tooltips.
+- **Anchor position** is now the cursor location at the moment
+  `screencapture` returns — effectively "just below the region you
+  finished dragging" for region cuts. Multi-display aware via
+  `NSScreen.visibleFrame`; flips above the cursor near the bottom of
+  the screen; falls back to bottom-right for fullscreen / clipboard
+  paths where there's no meaningful cursor.
+
 ## [0.11.0] — 2026-05-12
 
 The **auto-update** release. v0.10 added a passive update check
