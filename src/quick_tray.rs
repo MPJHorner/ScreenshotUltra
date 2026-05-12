@@ -19,9 +19,11 @@ mod mac {
     use objc2::{define_class, msg_send, sel, AllocAnyThread, MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
         NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSBezelStyle, NSButton,
-        NSColor, NSDragOperation, NSDraggingContext, NSDraggingItem, NSDraggingSession, NSEvent,
-        NSFloatingWindowLevel, NSImage, NSImageScaling, NSImageView, NSPasteboardItem,
-        NSPasteboardTypeFileURL, NSScreen, NSWindow, NSWindowStyleMask,
+        NSCellImagePosition, NSColor, NSDragOperation, NSDraggingContext, NSDraggingItem,
+        NSDraggingSession, NSEvent, NSFloatingWindowLevel, NSImage, NSImageScaling,
+        NSImageSymbolConfiguration, NSImageView, NSPasteboardItem, NSPasteboardTypeFileURL,
+        NSScreen, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState,
+        NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
     };
     use objc2_foundation::{NSArray, NSObject, NSPoint, NSRect, NSSize, NSString, NSTimer, NSURL};
 
@@ -295,10 +297,102 @@ mod mac {
         }
     }
 
-    const PANEL_W: f64 = 540.0;
-    const PANEL_H: f64 = 110.0;
-    const MARGIN: f64 = 24.0;
-    const THUMB: f64 = 80.0;
+    // Layout budget. The panel sizes itself to the screenshot's aspect ratio
+    // (capped so giant captures don't fill the screen, floored so a thin
+    // vertical strip still looks like a card). The action bar sits directly
+    // below the preview — same width — so the screenshot stays "alive" as
+    // the largest visual element and the actions read as belonging to it.
+    const PREVIEW_MAX_W: f64 = 380.0;
+    const PREVIEW_MAX_H: f64 = 260.0;
+    const PREVIEW_MIN_W: f64 = 260.0;
+    const PREVIEW_MIN_H: f64 = 150.0;
+    const OUTER_PAD: f64 = 10.0;
+    const PREVIEW_BAR_GAP: f64 = 8.0;
+    const BTN_SIZE: f64 = 30.0;
+    const BTN_GAP: f64 = 2.0;
+    const CORNER_RADIUS: f64 = 14.0;
+    const PREVIEW_CORNER_RADIUS: f64 = 8.0;
+    const SCREEN_MARGIN: f64 = 22.0;
+
+    /// Fit `(w, h)` inside `(max_w, max_h)` preserving aspect ratio, then
+    /// floor to the minimums so a sliver capture still looks like a card.
+    fn fit_preview(img_w: f64, img_h: f64) -> (f64, f64) {
+        if img_w <= 0.0 || img_h <= 0.0 {
+            return (PREVIEW_MAX_W, PREVIEW_MAX_H * 0.66);
+        }
+        let aspect = img_w / img_h;
+        let max_aspect = PREVIEW_MAX_W / PREVIEW_MAX_H;
+        let (mut w, mut h) = if aspect >= max_aspect {
+            (PREVIEW_MAX_W, PREVIEW_MAX_W / aspect)
+        } else {
+            (PREVIEW_MAX_H * aspect, PREVIEW_MAX_H)
+        };
+        if w < PREVIEW_MIN_W {
+            w = PREVIEW_MIN_W;
+        }
+        if h < PREVIEW_MIN_H {
+            h = PREVIEW_MIN_H;
+        }
+        (w.round(), h.round())
+    }
+
+    /// Find the NSScreen that contains `pt`, or `None` if the point is
+    /// off-screen (e.g. when called from a context without a real cursor
+    /// like a fullscreen capture pumped from a hotkey).
+    fn find_screen_for_point(mtm: MainThreadMarker, pt: NSPoint) -> Option<NSRect> {
+        let screens = unsafe { NSScreen::screens(mtm) };
+        for i in 0..screens.count() {
+            let s = screens.objectAtIndex(i);
+            let f = s.frame();
+            if pt.x >= f.origin.x
+                && pt.x <= f.origin.x + f.size.width
+                && pt.y >= f.origin.y
+                && pt.y <= f.origin.y + f.size.height
+            {
+                return Some(unsafe { s.visibleFrame() });
+            }
+        }
+        None
+    }
+
+    /// Choose a top-left origin so the panel hangs just below-and-slightly-
+    /// right of the cursor. Clamped to the screen's visible frame so the
+    /// panel never hides under the menu bar / Dock / off-screen.
+    fn anchor_under_cursor(
+        cursor: NSPoint,
+        screen: NSRect,
+        content_w: f64,
+        content_h: f64,
+    ) -> NSPoint {
+        // Offset just enough to clear the cursor + the OS's screencapture
+        // confirmation pip. AppKit's coord system has Y growing up, so to
+        // place the panel "below" the cursor we subtract content_h + offset.
+        const CURSOR_OFFSET_X: f64 = 12.0;
+        const CURSOR_OFFSET_Y: f64 = 14.0;
+
+        let mut x = cursor.x - content_w / 2.0 + CURSOR_OFFSET_X;
+        let mut y = cursor.y - content_h - CURSOR_OFFSET_Y;
+
+        let min_x = screen.origin.x + SCREEN_MARGIN;
+        let max_x = screen.origin.x + screen.size.width - content_w - SCREEN_MARGIN;
+        let min_y = screen.origin.y + SCREEN_MARGIN;
+        let max_y = screen.origin.y + screen.size.height - content_h - SCREEN_MARGIN;
+
+        // If anchoring below would clip off the bottom of the screen, flip
+        // and hang the panel above the cursor instead.
+        if y < min_y {
+            y = cursor.y + CURSOR_OFFSET_Y;
+        }
+
+        if max_x > min_x {
+            x = x.clamp(min_x, max_x);
+        }
+        if max_y > min_y {
+            y = y.clamp(min_y, max_y);
+        }
+
+        NSPoint { x, y }
+    }
 
     fn build_window(
         mtm: MainThreadMarker,
@@ -321,35 +415,52 @@ mod mac {
         }
 
         let screen_frame = NSScreen::mainScreen(mtm)
-            .map(|s| s.frame())
+            .map(|s| unsafe { s.visibleFrame() })
             .ok_or_else(|| "no main screen".to_string())?;
-        eprintln!(
-            "quick_tray: screen frame ({},{}) {}x{}",
-            screen_frame.origin.x,
-            screen_frame.origin.y,
-            screen_frame.size.width,
-            screen_frame.size.height
-        );
 
-        // Bottom-right of the main screen, above the dock.
-        let origin = NSPoint {
-            x: screen_frame.origin.x + screen_frame.size.width - PANEL_W - MARGIN,
-            y: screen_frame.origin.y + MARGIN + 80.0, // dock clearance
-        };
+        // Load image up-front so the window can be sized to the capture's
+        // aspect ratio rather than a fixed slab.
+        let image = load_image(image_path);
+        let (img_w, img_h) = image
+            .as_ref()
+            .map(|i| unsafe {
+                let s = i.size();
+                (s.width, s.height)
+            })
+            .unwrap_or((PREVIEW_MAX_W, PREVIEW_MAX_H * 0.66));
+        let (preview_w, preview_h) = fit_preview(img_w, img_h);
+
+        // Action row sizing — 7 icon buttons, centered under the preview.
+        let n_buttons: f64 = 7.0;
+        let row_w = BTN_SIZE * n_buttons + BTN_GAP * (n_buttons - 1.0);
+        let row_h = BTN_SIZE;
+
+        // Window content rect: preview on top, gap, action row beneath,
+        // outer padding all around. Width = whichever of preview/row is
+        // wider, so a very narrow vertical capture still hosts the bar.
+        let content_w = preview_w.max(row_w) + OUTER_PAD * 2.0;
+        let content_h = preview_h + PREVIEW_BAR_GAP + row_h + OUTER_PAD * 2.0;
+
+        // Anchor the panel just below where the user finished the cut.
+        // `screencapture -i` returns control the instant the user releases
+        // the drag, so the cursor is sitting near the bottom-right of the
+        // captured region — close enough to read as "this panel belongs to
+        // what I just snipped." If the cursor is unavailable (clipboard /
+        // fullscreen paths) or anchoring would push us off-screen, we fall
+        // back to the bottom-right of the active display.
+        let mouse = unsafe { NSEvent::mouseLocation() };
+        let target_screen = find_screen_for_point(mtm, mouse).unwrap_or(screen_frame);
+        let origin = anchor_under_cursor(mouse, target_screen, content_w, content_h);
         let rect = NSRect {
             origin,
             size: NSSize {
-                width: PANEL_W,
-                height: PANEL_H,
+                width: content_w,
+                height: content_h,
             },
         };
-        eprintln!(
-            "quick_tray: window rect ({},{}) {}x{}",
-            rect.origin.x, rect.origin.y, rect.size.width, rect.size.height
-        );
 
-        // Standard titled NSWindow — guaranteed visible chrome.
-        let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
+        // Borderless floating panel — we paint our own chrome.
+        let style = NSWindowStyleMask::Borderless;
         let window: Retained<NSWindow> = unsafe {
             let alloc = NSWindow::alloc(mtm);
             msg_send![
@@ -365,98 +476,110 @@ mod mac {
             window.setLevel(NSFloatingWindowLevel);
             window.setReleasedWhenClosed(false);
             window.setHidesOnDeactivate(false);
+            window.setOpaque(false);
+            window.setBackgroundColor(Some(&NSColor::clearColor()));
+            window.setHasShadow(true);
+            window.setMovableByWindowBackground(true);
             window.setCollectionBehavior(
-                objc2_app_kit::NSWindowCollectionBehavior::CanJoinAllSpaces
-                    | objc2_app_kit::NSWindowCollectionBehavior::Transient,
+                NSWindowCollectionBehavior::CanJoinAllSpaces
+                    | NSWindowCollectionBehavior::Transient,
             );
-            let title = NSString::from_str("Screenshot Ultra");
-            window.setTitle(&title);
-            // Bright background so we can't miss it during diagnosis.
-            let bg = NSColor::colorWithSRGBRed_green_blue_alpha(0.10, 0.12, 0.18, 1.0);
-            window.setBackgroundColor(Some(&bg));
-            window.setOpaque(true);
         }
 
-        let content_view = window
-            .contentView()
-            .ok_or_else(|| "window has no content view".to_string())?;
-
-        // Thumbnail
-        let thumb_rect = NSRect {
-            origin: NSPoint {
-                x: 14.0,
-                y: (PANEL_H - THUMB) / 2.0 - 12.0, /* leave room for title bar */
-            },
+        // Vibrancy / blurred dark background, rounded as the entire chrome.
+        let effect_frame = NSRect {
+            origin: NSPoint { x: 0.0, y: 0.0 },
             size: NSSize {
-                width: THUMB,
-                height: THUMB,
+                width: content_w,
+                height: content_h,
             },
         };
-        // The thumbnail is a DraggableThumb (NSImageView subclass) so
-        // users can drag the captured file straight out into Slack /
-        // Finder / a Mail compose window / etc.
-        THUMB_DRAG_PATH.with(|p| *p.borrow_mut() = Some(image_path.to_path_buf()));
-        let image_view: Retained<DraggableThumb> = unsafe {
-            let v: Retained<DraggableThumb> =
-                msg_send![DraggableThumb::alloc(mtm), initWithFrame: thumb_rect];
-            v.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
+        let effect: Retained<NSVisualEffectView> = unsafe {
+            let v = NSVisualEffectView::initWithFrame(NSVisualEffectView::alloc(mtm), effect_frame);
+            v.setMaterial(NSVisualEffectMaterial::HUDWindow);
+            v.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+            v.setState(NSVisualEffectState::Active);
             v.setWantsLayer(true);
-            if let Some(img) = load_image(image_path) {
-                v.setImage(Some(&img));
+            if let Some(layer) = v.layer() {
+                layer.setCornerRadius(CORNER_RADIUS);
+                layer.setMasksToBounds(true);
             }
             v
         };
-        unsafe { content_view.addSubview(&image_view) };
-
-        // Handler for clicks.
-        let handler: Retained<Handler> = unsafe { msg_send![Handler::alloc(), init] };
-
-        // Button row.
-        let labels = ["Copy", "Text", "Edit", "Folder", "Reveal", "Pin", "Discard"];
-        let tags: [isize; 7] = [1, 7, 2, 3, 4, 5, 6];
-        let btn_w = 56.0;
-        let btn_h = 28.0;
-        let gap = 4.0;
-        let total = (btn_w * labels.len() as f64) + (gap * (labels.len() as f64 - 1.0));
-        let start_x = PANEL_W - total - 14.0;
-        let y = (PANEL_H - btn_h) / 2.0 - 12.0;
-        for (i, label) in labels.iter().enumerate() {
-            let rect = NSRect {
-                origin: NSPoint {
-                    x: start_x + (btn_w + gap) * i as f64,
-                    y,
-                },
-                size: NSSize {
-                    width: btn_w,
-                    height: btn_h,
-                },
-            };
-            let title = NSString::from_str(label);
-            let btn: Retained<NSButton> = unsafe {
-                let b = NSButton::initWithFrame(NSButton::alloc(mtm), rect);
-                b.setTitle(&title);
-                b.setBezelStyle(NSBezelStyle::Push);
-                b.setBordered(true);
-                b.setTag(tags[i]);
-                b.setTarget(Some(handler.as_ref()));
-                b.setAction(Some(sel!(buttonClicked:)));
-                b
-            };
-            unsafe { content_view.addSubview(&btn) };
+        unsafe {
+            let any: &AnyObject = (*effect).as_ref();
+            let _: () = msg_send![&*window, setContentView: any];
         }
 
-        // Show with explicit activation. `makeKeyAndOrderFront` brings it on
-        // screen, then we force a draw via display() and pump one runloop
-        // iteration so AppKit actually paints before we return.
+        // Preview image view — large, aspect-correct, draggable, rounded.
+        let preview_y = OUTER_PAD + row_h + PREVIEW_BAR_GAP;
+        let preview_x = (content_w - preview_w) / 2.0;
+        let preview_frame = NSRect {
+            origin: NSPoint {
+                x: preview_x,
+                y: preview_y,
+            },
+            size: NSSize {
+                width: preview_w,
+                height: preview_h,
+            },
+        };
+        THUMB_DRAG_PATH.with(|p| *p.borrow_mut() = Some(image_path.to_path_buf()));
+        let image_view: Retained<DraggableThumb> = unsafe {
+            let v: Retained<DraggableThumb> =
+                msg_send![DraggableThumb::alloc(mtm), initWithFrame: preview_frame];
+            v.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
+            v.setWantsLayer(true);
+            if let Some(layer) = v.layer() {
+                layer.setCornerRadius(PREVIEW_CORNER_RADIUS);
+                layer.setMasksToBounds(true);
+                // Faint checkerboard-ish base so transparent PNGs still
+                // read as having a frame.
+                let bg = NSColor::colorWithSRGBRed_green_blue_alpha(0.0, 0.0, 0.0, 0.28);
+                layer.setBackgroundColor(Some(&*bg.CGColor()));
+            }
+            if let Some(img) = image.as_deref() {
+                v.setImage(Some(img));
+            }
+            v
+        };
+        unsafe { effect.addSubview(&image_view) };
+
+        // Handler for clicks + timer fires.
+        let handler: Retained<Handler> = unsafe { msg_send![Handler::alloc(), init] };
+
+        // Icon button row, centered horizontally under the preview.
+        let labels = ["Copy", "Text", "Edit", "Folder", "Reveal", "Pin", "Discard"];
+        let symbols = [
+            "doc.on.doc",
+            "text.viewfinder",
+            "pencil",
+            "folder",
+            "magnifyingglass",
+            "pin",
+            "trash",
+        ];
+        let tags: [isize; 7] = [1, 7, 2, 3, 4, 5, 6];
+        let row_start_x = (content_w - row_w) / 2.0;
+        for i in 0..labels.len() {
+            let x = row_start_x + (BTN_SIZE + BTN_GAP) * i as f64;
+            let frame = NSRect {
+                origin: NSPoint { x, y: OUTER_PAD },
+                size: NSSize {
+                    width: BTN_SIZE,
+                    height: BTN_SIZE,
+                },
+            };
+            let btn =
+                make_icon_button(mtm, frame, symbols[i], labels[i], tags[i], handler.as_ref());
+            unsafe { effect.addSubview(&btn) };
+        }
+
         unsafe {
             window.makeKeyAndOrderFront(None);
             window.orderFrontRegardless();
             window.display();
         }
-
-        eprintln!("quick_tray: window onScreen={}", unsafe {
-            window.isVisible()
-        });
 
         let interval = (timeout_ms as f64) / 1000.0;
         let timer: Retained<NSTimer> = unsafe {
@@ -475,6 +598,48 @@ mod mac {
             _handler: handler,
             timer: Some(timer),
         })
+    }
+
+    /// Build a compact icon-only NSButton with an SF Symbol glyph, white
+    /// tint, and hover border. The Handler dispatches by `tag`.
+    fn make_icon_button(
+        mtm: MainThreadMarker,
+        frame: NSRect,
+        symbol: &str,
+        accessibility: &str,
+        tag: isize,
+        handler: &Handler,
+    ) -> Retained<NSButton> {
+        unsafe {
+            let btn = NSButton::initWithFrame(NSButton::alloc(mtm), frame);
+            btn.setTitle(&NSString::from_str(""));
+            btn.setBezelStyle(NSBezelStyle::AccessoryBar);
+            btn.setBordered(true);
+            btn.setShowsBorderOnlyWhileMouseInside(true);
+            btn.setImagePosition(NSCellImagePosition::ImageOnly);
+            btn.setImageScaling(NSImageScaling::ScaleProportionallyDown);
+            btn.setTag(tag);
+            btn.setTarget(Some(handler));
+            btn.setAction(Some(sel!(buttonClicked:)));
+            let tt = NSString::from_str(accessibility);
+            let _: () = msg_send![&*btn, setToolTip: &*tt];
+
+            let sym = NSString::from_str(symbol);
+            let acc = NSString::from_str(accessibility);
+            if let Some(img) =
+                NSImage::imageWithSystemSymbolName_accessibilityDescription(&sym, Some(&acc))
+            {
+                // Slightly heavier weight reads better on dark HUD bg.
+                let config =
+                    NSImageSymbolConfiguration::configurationWithPointSize_weight(15.0, 0.23);
+                let resolved = img
+                    .imageWithSymbolConfiguration(&config)
+                    .unwrap_or_else(|| img.clone());
+                btn.setImage(Some(&resolved));
+                btn.setContentTintColor(Some(&NSColor::whiteColor()));
+            }
+            btn
+        }
     }
 
     fn load_image(path: &Path) -> Option<Retained<NSImage>> {
