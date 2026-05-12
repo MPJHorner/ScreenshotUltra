@@ -5,6 +5,8 @@ Cargo.lock.bak
 
 # Generated artefacts — re-rendered by scripts/render-icon.sh from icon.svg.
 /icon/AppIcon.iconset
+# Compiled Swift recorder; rebuilt by scripts/build-recorder.sh.
+/target/recorder
 *.swp
 *.swo
 

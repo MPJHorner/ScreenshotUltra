@@ -11,7 +11,7 @@
 // the swap is contained.
 
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::time::Instant;
@@ -23,6 +23,95 @@ use crate::quick_tray;
 use crate::settings::Settings;
 use crate::sinks;
 use crate::tray;
+
+/// Which underlying recorder we used. Affects the signal sent on stop
+/// (STURecorder handles SIGTERM cleanly; `screencapture -v` expects
+/// SIGINT) and what we report in NDJSON.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Backend {
+    /// Bundled native ScreenCaptureKit + AVAssetWriter recorder.
+    Sck,
+    /// Fallback to macOS's `screencapture -v`.
+    Screencapture,
+}
+
+impl Backend {
+    fn as_str(self) -> &'static str {
+        match self {
+            Backend::Sck => "screencapturekit",
+            Backend::Screencapture => "screencapture",
+        }
+    }
+    fn stop_signal(self) -> i32 {
+        // SIGTERM (15) lets STURecorder unwind via its DispatchSource
+        // handler; `screencapture -v` only finalises the moov atom on
+        // SIGINT (2).
+        match self {
+            Backend::Sck => 15,
+            Backend::Screencapture => 2,
+        }
+    }
+}
+
+fn spawn_sck(recorder: &Path, output: &Path, settings: &Settings) -> Result<Child> {
+    let mut cmd = Command::new(recorder);
+    cmd.arg(output);
+    cmd.arg("--fps").arg("60");
+    if settings.capture.include_cursor {
+        cmd.arg("--show-cursor");
+    }
+    if settings.recording.record_microphone {
+        cmd.arg("--mic");
+    }
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .with_context(|| format!("spawning {}", recorder.display()))
+}
+
+fn spawn_screencapture(output: &Path, settings: &Settings) -> Result<Child> {
+    let mut cmd = Command::new("/usr/sbin/screencapture");
+    cmd.arg("-v"); // streaming video; SIGINT finalises
+    if settings.recording.show_clicks {
+        cmd.arg("-k");
+    }
+    if settings.recording.record_microphone {
+        cmd.arg("-g");
+    }
+    cmd.arg(output);
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .with_context(|| "spawning screencapture -v")
+}
+
+/// Find the bundled `STURecorder` binary inside the .app, if present.
+/// Falls back to `target/recorder/STURecorder` so `cargo run` from the
+/// repo (without going through `make app`) still picks up a freshly
+/// compiled recorder. Returns None if neither exists.
+fn find_sck_recorder() -> Option<PathBuf> {
+    let candidates: Vec<PathBuf> = {
+        let mut v: Vec<PathBuf> = Vec::new();
+        if let Ok(exe) = std::env::current_exe() {
+            // ~/Applications/Screenshot Ultra.app/Contents/MacOS/screenshot-ultra
+            //                                              ^^^^^   ^^^^^^^^^^^^^^^^
+            // → ../Resources/STURecorder
+            if let Some(macos_dir) = exe.parent() {
+                if let Some(contents) = macos_dir.parent() {
+                    v.push(contents.join("Resources").join("STURecorder"));
+                }
+            }
+        }
+        // Dev path: `cargo run` from the repo root.
+        if let Ok(cwd) = std::env::current_dir() {
+            v.push(cwd.join("target").join("recorder").join("STURecorder"));
+        }
+        v
+    };
+    candidates.into_iter().find(|c| c.is_file())
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecordingKind {
@@ -44,6 +133,7 @@ struct ActiveRecording {
     kind: RecordingKind,
     path: PathBuf,
     started: Instant,
+    backend: Backend,
 }
 
 static ACTIVE: Mutex<Option<ActiveRecording>> = Mutex::new(None);
@@ -67,22 +157,33 @@ pub fn start(kind: RecordingKind, settings: &Settings) -> Result<()> {
     // The frame grabber always writes a .mov; GIF post-process renames.
     let path = render_path_for_recording(&folder, kind, &settings.general.filename_template);
 
-    let mut cmd = Command::new("/usr/sbin/screencapture");
-    cmd.arg("-v"); // streaming video, SIGINT to finalise
-    if settings.recording.show_clicks {
-        cmd.arg("-k");
-    }
-    if settings.recording.record_microphone {
-        cmd.arg("-g");
-    }
-    cmd.arg(&path);
-
-    let child = cmd
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .with_context(|| "spawning screencapture -v")?;
+    // Prefer the bundled SCK recorder if present and the user hasn't
+    // opted out via the setting. Falls back to `screencapture -v`.
+    let (child, backend) = if settings.recording.use_screen_capture_kit {
+        match find_sck_recorder() {
+            Some(p) => match spawn_sck(&p, &path, settings) {
+                Ok(c) => (c, Backend::Sck),
+                Err(err) => {
+                    eprintln!(
+                        "recording: SCK recorder failed to spawn ({err:#}); falling back to screencapture -v"
+                    );
+                    (
+                        spawn_screencapture(&path, settings)?,
+                        Backend::Screencapture,
+                    )
+                }
+            },
+            None => (
+                spawn_screencapture(&path, settings)?,
+                Backend::Screencapture,
+            ),
+        }
+    } else {
+        (
+            spawn_screencapture(&path, settings)?,
+            Backend::Screencapture,
+        )
+    };
 
     logging::event(serde_json::json!({
         "evt": "recording_start",
@@ -90,14 +191,20 @@ pub fn start(kind: RecordingKind, settings: &Settings) -> Result<()> {
         "path": path.display().to_string(),
         "show_clicks": settings.recording.show_clicks,
         "microphone": settings.recording.record_microphone,
+        "backend": backend.as_str(),
     }));
-    eprintln!("recording: started → {}", path.display());
+    eprintln!(
+        "recording: started → {} (backend: {})",
+        path.display(),
+        backend.as_str()
+    );
 
     *ACTIVE.lock().unwrap() = Some(ActiveRecording {
         child,
         kind,
         path,
         started: Instant::now(),
+        backend,
     });
     tray::set_recording_indicator(true);
     if settings.recording.keystroke_overlay {
@@ -114,11 +221,11 @@ pub fn stop(settings: &Settings) -> Result<()> {
         anyhow::bail!("no recording is in progress");
     };
     let pid = rec.child.id() as i32;
-    // SIGINT is what screencapture -v expects to finalise the file.
+    // STURecorder cleans up on SIGTERM; screencapture -v wants SIGINT.
     unsafe {
-        libc_kill(pid, 2 /* SIGINT */);
+        libc_kill(pid, rec.backend.stop_signal());
     }
-    // Wait up to 5 s for the process to finalise the moov atom.
+    // Wait for the process to finalise the moov atom.
     let _ = rec.child.wait();
     let duration_s = rec.started.elapsed().as_secs_f64();
 

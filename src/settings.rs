@@ -32,6 +32,16 @@ pub struct RecordingOptions {
     /// Requires Accessibility permission (macOS prompts on first use).
     #[serde(default)]
     pub keystroke_overlay: bool,
+    /// Prefer the bundled SCK-based recorder over `screencapture -v`.
+    /// On by default; falls back to `screencapture -v` automatically if
+    /// the recorder binary is missing from the .app bundle (which
+    /// happens on machines without `swiftc` at build time).
+    #[serde(default = "default_use_sck")]
+    pub use_screen_capture_kit: bool,
+}
+
+fn default_use_sck() -> bool {
+    true
 }
 
 impl Default for RecordingOptions {
@@ -40,6 +50,7 @@ impl Default for RecordingOptions {
             show_clicks: true,
             record_microphone: false,
             keystroke_overlay: false,
+            use_screen_capture_kit: true,
         }
     }
 }

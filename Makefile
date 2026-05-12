@@ -35,14 +35,27 @@ check: fmt clippy test
 build:
 	$(CARGO) build --release
 
-app: build icon/AppIcon.icns
+app: build icon/AppIcon.icns recorder
 	@rm -rf "$(APP_DIR)"
 	@mkdir -p "$(APP_DIR)/Contents/MacOS" "$(APP_DIR)/Contents/Resources"
 	@cp "$(RELEASE_DIR)/$(BIN_NAME)" "$(APP_DIR)/Contents/MacOS/$(BIN_NAME)"
 	@cp mac/Info.plist "$(APP_DIR)/Contents/Info.plist"
 	@cp icon/AppIcon.icns "$(APP_DIR)/Contents/Resources/AppIcon.icns"
+	@if [ -f target/recorder/STURecorder ]; then \
+		cp target/recorder/STURecorder "$(APP_DIR)/Contents/Resources/STURecorder"; \
+		chmod +x "$(APP_DIR)/Contents/Resources/STURecorder"; \
+	else \
+		echo "  (no STURecorder built; the app will fall back to screencapture -v)"; \
+	fi
 	@echo "APPL????" > "$(APP_DIR)/Contents/PkgInfo"
 	@echo "Built $(APP_DIR)"
+
+# Compile mac/STURecorder.swift into a universal binary. Best-effort
+# (`scripts/build-recorder.sh` skips itself when swiftc is missing) so
+# the `app` target works on Macs without Xcode CLT.
+.PHONY: recorder
+recorder:
+	@bash scripts/build-recorder.sh
 
 # Render icon/icon.svg into a full AppIcon.icns via Swift's NSImage + iconutil.
 # Regenerate by deleting AppIcon.icns and re-running `make app`.

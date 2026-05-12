@@ -7,13 +7,18 @@ as still capture.
 
 ## Scope (from plan.md §13)
 
-- [~] Video recording — **v0 shipped via `screencapture -v` + SIGINT**
-      (writes `.mov`). Native ScreenCaptureKit → AVAssetWriter pipeline
-      replaces it in a follow-up.
-- [ ] 30 / 60 fps configurable. *(screencapture -v doesn't expose this;
-      ScreenCaptureKit backend will.)*
-- [ ] System audio capture. *(macOS-26 ScreenCaptureKit supports it
-      natively; will land with the SCK backend.)*
+- [x] **Video recording — native ScreenCaptureKit backend** (v0.10.0).
+      `mac/STURecorder.swift` uses `SCStream` + `AVAssetWriter` to write
+      H.264 .mov at full Retina pixel dimensions. Bundled into the .app's
+      `Contents/Resources/` at build time via `scripts/build-recorder.sh`.
+      Auto-falls back to `screencapture -v` when the bundled binary
+      isn't present.
+- [x] **60 fps**. Default; user can override via the SCK recorder's
+      `--fps N` arg (not yet plumbed into a setting — easy follow-up).
+- [ ] System audio capture. *(Adding SCStream audio output is straightforward
+      in the Swift recorder; the main blocker is that system-audio capture
+      on unsigned binaries is unreliable on macOS 26. Will land when M6
+      signing unlocks.)*
 - [~] Microphone capture — `[recording].record_microphone = true`
       passes `-g` to `screencapture`. Device-picker UI deferred.
 - [x] **Mouse-click highlight** — `[recording].show_clicks = true`

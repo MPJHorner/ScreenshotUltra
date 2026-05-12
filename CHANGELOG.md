@@ -5,6 +5,46 @@ All notable changes to Screenshot Ultra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-05-12
+
+The **native recorder** release. `screencapture -v` was a great
+bootstrap, but it tops out at ~30 fps and gives us no quality knobs.
+v0.10 ships a real ScreenCaptureKit + AVAssetWriter pipeline.
+
+### Added — ScreenCaptureKit recording backend
+- **`mac/STURecorder.swift`** — a ~190-line Swift CLI built on
+  `SCStream` + `AVAssetWriter`. Captures the main display at H.264
+  1080p+ (full Retina pixel dimensions) at **60 fps** by default,
+  with a sensible bitrate (≈ `width × height × fps / 8` bps), 2-second
+  GOP, High Profile. Cleanly handles SIGTERM/SIGINT to finalise the
+  `.mov` (writes the `moov` atom before exit).
+- **`scripts/build-recorder.sh`** compiles a **universal binary**
+  (arm64 + x86_64 on supported SDKs, arm64-only otherwise) via
+  `swiftc` and drops it at `target/recorder/STURecorder`. Graceful
+  no-op when `swiftc` isn't on PATH.
+- **`make app`** bundles the binary into
+  `Contents/Resources/STURecorder` so the `.app` is fully self-
+  contained.
+- `src/recording.rs` now tries the bundled `STURecorder` first and
+  **falls back to `screencapture -v` automatically** if (a) the
+  bundle doesn't have one (dev build without `swiftc`), (b) spawning
+  fails, or (c) the user sets `[recording].use_screen_capture_kit = false`.
+- Per-backend signal handling: SIGTERM for STURecorder (matches its
+  graceful shutdown), SIGINT for `screencapture -v` (what it expects).
+- `recording_start` NDJSON event now records the `backend` field
+  (`screencapturekit` or `screencapture`).
+- New setting `[recording].use_screen_capture_kit` (default `true`).
+
+### Why a Swift bridge (not pure-Rust objc2)?
+- `SCStreamOutput` is a Cocoa delegate with async sample-buffer
+  callbacks. `AVAssetWriter` has its own threading model around
+  `expectsMediaDataInRealTime` and `startSession(atSourceTime:)`.
+- Swift expresses this in ~190 lines with idiomatic `async` /
+  `await`. The same in `objc2` would be 600+ lines of
+  `RcBlock`-wrapped delegate methods + manual `CMSampleBuffer`
+  juggling. The Swift binary is 250 KB and lives inside the .app
+  bundle — no runtime hit, no extra deps.
+
 ## [0.9.1] — 2026-05-12
 
 ### Added — per-mode shell sink overrides
