@@ -11,6 +11,10 @@ other way) to open the native annotation editor. It's a real
 `NSWindow` backed by a custom canvas — not a subprocess, not a
 WebView, not Apple Preview.
 
+> **Drag-out tip:** you can drag the **Quick Tray thumbnail** directly into
+> Slack / Mail / a Finder window without ever opening the editor — the file
+> URL goes on the drag pasteboard, the screenshot lands in the target app.
+
 ## Tools
 
 | Tool         | Shortcut | What it does                                              |

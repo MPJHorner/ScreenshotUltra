@@ -15,14 +15,15 @@ mod mac {
     use std::path::{Path, PathBuf};
 
     use objc2::rc::Retained;
-    use objc2::runtime::AnyObject;
+    use objc2::runtime::{AnyObject, ProtocolObject};
     use objc2::{define_class, msg_send, sel, AllocAnyThread, MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
         NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSBezelStyle, NSButton,
-        NSColor, NSFloatingWindowLevel, NSImage, NSImageScaling, NSImageView, NSScreen, NSWindow,
-        NSWindowStyleMask,
+        NSColor, NSDragOperation, NSDraggingContext, NSDraggingItem, NSDraggingSession, NSEvent,
+        NSFloatingWindowLevel, NSImage, NSImageScaling, NSImageView, NSPasteboardItem,
+        NSPasteboardTypeFileURL, NSScreen, NSWindow, NSWindowStyleMask,
     };
-    use objc2_foundation::{NSObject, NSPoint, NSRect, NSSize, NSString, NSTimer, NSURL};
+    use objc2_foundation::{NSArray, NSObject, NSPoint, NSRect, NSSize, NSString, NSTimer, NSURL};
 
     #[derive(Debug, Clone, Copy)]
     enum Action {
@@ -58,6 +59,105 @@ mod mac {
         match build_window(mtm, image_path, timeout_ms) {
             Ok(state) => CURRENT.with(|slot| *slot.borrow_mut() = Some(state)),
             Err(err) => eprintln!("quick_tray: build failed: {err}"),
+        }
+    }
+
+    // The path currently being shown in the Quick Tray's thumbnail.
+    // Reading this from the drag source lets us avoid wrestling with
+    // objc2 ivars — at most one Quick Tray is on screen at a time, so
+    // a thread-local is sufficient.
+    thread_local! {
+        static THUMB_DRAG_PATH: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    }
+
+    define_class!(
+        /// NSImageView subclass that becomes the drag source for the
+        /// thumbnail. Once the user moves the mouse more than a few
+        /// points past `mouseDown`, we initiate a drag session whose
+        /// pasteboard item points at the captured file — so the
+        /// user can drop the screenshot straight into Slack, an
+        /// email composer, Finder, anywhere that takes a file.
+        ///
+        /// NSDraggingSource conformance is asserted via the runtime by
+        /// providing the required method below; we bypass the Rust
+        /// typed binding (`beginDraggingSessionWithItems:event:source:`)
+        /// because objc2's strict generics + duplicate-objc2-version
+        /// trees won't let us prove the conformance at the type level.
+        #[unsafe(super(NSImageView))]
+        #[name = "STUDraggableThumb"]
+        #[derive(Debug)]
+        struct DraggableThumb;
+
+        impl DraggableThumb {
+            #[unsafe(method(mouseDown:))]
+            fn mouse_down(&self, _event: &NSEvent) {
+                DRAG_START.with(|s| *s.borrow_mut() = Some(true));
+            }
+
+            #[unsafe(method(mouseDragged:))]
+            fn mouse_dragged(&self, event: &NSEvent) {
+                let started = DRAG_START.with(|s| s.borrow().is_some());
+                if !started {
+                    return;
+                }
+                DRAG_START.with(|s| *s.borrow_mut() = None);
+                let path = THUMB_DRAG_PATH.with(|p| p.borrow().clone());
+                let Some(path) = path else { return };
+                begin_drag(self, event, &path);
+            }
+
+            /// Required by `NSDraggingSource`. Returning `Copy` lets the
+            /// drop target make a copy of the file — exactly what we
+            /// want when dragging a screenshot into Mail, Slack, etc.
+            #[unsafe(method(draggingSession:sourceOperationMaskForDraggingContext:))]
+            fn dragging_session_source_operation_mask_for_dragging_context(
+                &self,
+                _session: &NSDraggingSession,
+                _context: NSDraggingContext,
+            ) -> NSDragOperation {
+                NSDragOperation::Copy
+            }
+        }
+    );
+
+    thread_local! {
+        static DRAG_START: RefCell<Option<bool>> = const { RefCell::new(None) };
+    }
+
+    fn begin_drag(view: &DraggableThumb, event: &NSEvent, path: &Path) {
+        unsafe {
+            // Build an NSPasteboardItem with the file URL.
+            let pb_item: Retained<NSPasteboardItem> = msg_send![NSPasteboardItem::alloc(), init];
+            let abs = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+            let url_str = NSString::from_str(&format!("file://{}", abs.display()));
+            pb_item.setString_forType(&url_str, NSPasteboardTypeFileURL);
+
+            // Wrap it in an NSDraggingItem with the thumbnail as the drag image.
+            let writer: &ProtocolObject<dyn objc2_app_kit::NSPasteboardWriting> =
+                ProtocolObject::from_ref(&*pb_item);
+            let drag_item: Retained<NSDraggingItem> =
+                NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), writer);
+            let bounds = view.bounds();
+            let contents: Option<Retained<NSImage>> = msg_send![view, image];
+            drag_item
+                .setDraggingFrame_contents(bounds, contents.as_deref().map(|i| i as &AnyObject));
+
+            let items: Retained<NSArray<NSDraggingItem>> =
+                NSArray::from_retained_slice(&[drag_item]);
+            // Bypass the typed binding's strict `&ProtocolObject<dyn NSDraggingSource>`
+            // and dispatch by selector — Cocoa only cares that the object
+            // responds to the required selector at runtime.
+            let _session: Retained<NSDraggingSession> = msg_send![
+                view,
+                beginDraggingSessionWithItems: &*items,
+                event: event,
+                source: view as &AnyObject,
+            ];
+            crate::logging::event(serde_json::json!({
+                "evt": "tray_action",
+                "action": "drag_out",
+                "path": path.display().to_string(),
+            }));
         }
     }
 
@@ -292,8 +392,13 @@ mod mac {
                 height: THUMB,
             },
         };
-        let image_view = unsafe {
-            let v = NSImageView::initWithFrame(NSImageView::alloc(mtm), thumb_rect);
+        // The thumbnail is a DraggableThumb (NSImageView subclass) so
+        // users can drag the captured file straight out into Slack /
+        // Finder / a Mail compose window / etc.
+        THUMB_DRAG_PATH.with(|p| *p.borrow_mut() = Some(image_path.to_path_buf()));
+        let image_view: Retained<DraggableThumb> = unsafe {
+            let v: Retained<DraggableThumb> =
+                msg_send![DraggableThumb::alloc(mtm), initWithFrame: thumb_rect];
             v.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
             v.setWantsLayer(true);
             if let Some(img) = load_image(image_path) {
