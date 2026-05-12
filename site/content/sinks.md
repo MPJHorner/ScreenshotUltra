@@ -1,3 +1,9 @@
+---
+title: "Sinks & shell"
+description: "Clipboard, disk, and an arbitrary shell command. Wire up S3 / Slack / scp / whatever you want."
+slug: "sinks"
+---
+
 # Sinks & shell
 
 Every successful capture fans out to one or more **sinks**. Disk and
@@ -12,8 +18,8 @@ clipboard = true   # image lands on the macOS clipboard
 disk      = true   # image saved under save_folder
 ```
 
-Combined with `[general].copy_on_capture`, you have fine-grained control
-over which captures hit the clipboard.
+Combined with `[general].copy_on_capture`, you have fine-grained
+control over which captures hit the clipboard.
 
 ## Shell sink
 
@@ -27,11 +33,11 @@ shell = "scp $1 user@host:/var/www/img/"
 
 Mechanics:
 
-- The command is invoked as `/bin/sh -c "<your command>" -- <path>`, so
-  positional `$1` works idiomatically.
-- The child is **spawned detached** (`stdin/stdout/stderr` redirected to
-  `/dev/null`) so a slow uploader can never stall the capture pipeline.
-- Empty or whitespace-only `shell` is a no-op.
+- The command is invoked as `/bin/sh -c "<your command>" -- <path>`,
+  so positional `$1` works idiomatically.
+- The child is **spawned detached** (`stdin/stdout/stderr` → `/dev/null`)
+  so a slow uploader can never stall the capture pipeline.
+- Empty / whitespace-only `shell` is a no-op.
 
 ## Examples
 
@@ -76,7 +82,7 @@ shell = "/usr/local/bin/upload-shot $1"
 
 ## Why no built-in cloud uploader?
 
-Building a "share to URL" feature would mean shipping a hosted service or
-binding to specific cloud providers. The shell sink is more flexible
-*and* keeps the binary entirely network-free in its default
-configuration.
+Building a "share to URL" feature would mean shipping a hosted service
+or binding to specific cloud providers. The shell sink is more
+flexible *and* keeps the binary entirely network-free in its default
+configuration. Open Little Snitch — it'll never light up.

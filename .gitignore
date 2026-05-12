@@ -22,3 +22,7 @@ Cargo.lock.bak
 # OS / runtime
 .env
 .env.local
+
+# Site builder outputs
+site/dist
+site/node_modules
